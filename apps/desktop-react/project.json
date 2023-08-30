@@ -13,10 +13,12 @@
       },
       "configurations": {
         "development": {
-          "mode": "development"
+          "mode": "development",
+          "baseHref": "/"
         },
         "production": {
-          "mode": "production"
+          "mode": "production",
+          "baseHref": "./"
         }
       }
     },
