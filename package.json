@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "serve": "nx serve desktop-react & nx serve desktop-electron"
+    "serve": "nx serve desktop-react & nx serve desktop-electron",
+    "pick-make": "/bin/bash pick-identity-and-make.sh",
+    "pick-pack": "/bin/bash pick-identity-and-pack.sh"
   },
   "private": true,
   "dependencies": {
