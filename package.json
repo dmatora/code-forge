@@ -2,7 +2,9 @@
   "name": "nx-electron-boilerplate",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "serve": "nx serve desktop-react & nx serve desktop-electron"
+  },
   "private": true,
   "dependencies": {
     "@swc/helpers": "~0.5.2",
