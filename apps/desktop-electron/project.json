@@ -38,6 +38,7 @@
       "options": {
         "name": "desktop-electron",
         "frontendProject": "desktop-react",
+        "sourcePath": "dist/apps",
         "outputPath": "dist/packages",
         "prepackageOnly": true
       }
@@ -47,6 +48,7 @@
       "options": {
         "name": "desktop-electron",
         "frontendProject": "desktop-react",
+        "sourcePath": "dist/apps",
         "outputPath": "dist/executables"
       }
     },
