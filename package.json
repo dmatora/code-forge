@@ -15,6 +15,7 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@nrwl/workspace": "15.9.4",
     "@nx/eslint-plugin": "16.10.0",
     "@nx/jest": "16.10.0",
     "@nx/js": "16.10.0",
