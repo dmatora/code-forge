@@ -1,20 +1,20 @@
 interface ElectronAPI {
-  getAppVersion: () => Promise<string>;
+  getAppVersion: () => Promise;
   platform: string;
 
   // Project management
-  getProjects: () => Promise<any[]>;
-  createProject: (project: any) => Promise<any>;
-  updateProject: (project: any) => Promise<any>;
-  deleteProject: (id: string) => Promise<boolean>;
+  getProjects: () => Promise;
+  createProject: (project: any) => Promise;
+  updateProject: (project: any) => Promise;
+  deleteProject: (id: string) => Promise;
 
   // File operations
-  selectFolders: () => Promise<string[]>;
-  generateContext: (folders: string[]) => Promise<string>;
+  selectFolders: () => Promise;
+  generateContext: (folders: string[]) => Promise;
 
   // API
   getApiConfig: () => Promise<{ url: string; model: string } | null>;
-  sendPrompt: (data: { prompt: string; context: string }) => Promise<any>;
+  sendPrompt: (data: { prompt: string; context: string; projectFolders?: string[] }) => Promise;
 }
 
 interface Window {

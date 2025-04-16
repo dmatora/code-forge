@@ -18,7 +18,7 @@ interface PromptInterfaceProps {
   project: Project;
 }
 
-const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
+const PromptInterface: React.FC = ({ project }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
   const [response, setResponse] = useState('');
@@ -68,8 +68,19 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
 
     setLoading(true);
     try {
-      const result = await window.electron.sendPrompt({ prompt, context });
+      const result = await window.electron.sendPrompt({
+        prompt,
+        context,
+        projectFolders: project.folders
+      });
       setResponse(result.response || JSON.stringify(result));
+      toast({
+        title: "Process completed",
+        description: "First response displayed. Second response saved to output.txt",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
     } catch (error) {
       console.error('API request failed:', error);
       setResponse(`Error: ${error.message}`);
@@ -101,8 +112,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
   };
 
   return (
-    <VStack spacing={6} align="stretch">
-      <Heading as="h2" size="md">Project: {project.name}</Heading>
+    <Box>
+      <Heading size="md" mb={4}>
+        Project: {project.name}
+      </Heading>
 
       {!apiInfo?.url && (
         <Alert status="warning" mb={4}>
@@ -113,8 +126,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
         </Alert>
       )}
 
-      <Box>
-        <Heading as="h3" size="sm" mb={2}>Prompt</Heading>
+      <VStack align="stretch" spacing={4} mb={6}>
+        <Heading size="sm">Prompt</Heading>
         <Textarea
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
@@ -143,29 +156,33 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
             Send
           </Button>
         )}
-      </Box>
+      </VStack>
 
-      <Box>
-        <Heading as="h3" size="sm" mb={2}>Context</Heading>
+      <Box mb={6}>
+        <Heading size="sm" mb={2}>
+          Context
+        </Heading>
         {contextLoading ? (
-          <Box textAlign="center" py={4}>
-            <Text>Loading context...</Text>
-          </Box>
+          <Text>
+            Loading context...
+          </Text>
         ) : (
-          <Box
+          <Text
             bg={bgColor}
             p={3}
             borderRadius="md"
             fontSize="sm"
           >
-            <Text>{context.length} characters total</Text>
-          </Box>
+            {context.length} characters total
+          </Text>
         )}
       </Box>
 
       {response && (
         <Box>
-          <Heading as="h3" size="sm" mb={2}>Response</Heading>
+          <Heading size="sm" mb={2}>
+            Response
+          </Heading>
           <Box
             bg={responseBg}
             p={4}
@@ -176,7 +193,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
           </Box>
         </Box>
       )}
-    </VStack>
+    </Box>
   );
 };
 
