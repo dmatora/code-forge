@@ -17,4 +17,9 @@ contextBridge.exposeInMainWorld('electron', {
   // API
   getApiConfig: () => ipcRenderer.invoke('get-api-config'),
   sendPrompt: (data) => ipcRenderer.invoke('send-prompt', data),
+  getModels: () => ipcRenderer.invoke('get-models'), // Get available models
+  
+  // Preferences
+  getPreferences: () => ipcRenderer.invoke('get-preferences'),
+  saveModelPreferences: (preferences) => ipcRenderer.invoke('save-model-preferences', preferences),
 });

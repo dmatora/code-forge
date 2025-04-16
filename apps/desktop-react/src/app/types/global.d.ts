@@ -14,7 +14,18 @@ interface ElectronAPI {
 
   // API
   getApiConfig: () => Promise<{ url: string; model: string } | null>;
-  sendPrompt: (data: { prompt: string; context: string; projectFolders?: string[] }) => Promise;
+  sendPrompt: (data: { 
+    prompt: string; 
+    context: string; 
+    projectFolders?: string[];
+    reasoningModel?: string;
+    regularModel?: string;
+  }) => Promise;
+  getModels: () => Promise; // Get available models
+  
+  // Preferences
+  getPreferences: () => Promise<{ reasoningModel?: string; regularModel?: string }>;
+  saveModelPreferences: (preferences: { reasoningModel?: string; regularModel?: string }) => Promise;
 }
 
 interface Window {

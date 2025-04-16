@@ -10,8 +10,14 @@ import {
   AlertTitle,
   AlertDescription,
   useColorModeValue,
-  useToast
+  useToast,
+  Select,
+  FormControl,
+  FormLabel,
+  HStack,
+  Flex
 } from '@chakra-ui/react';
+import { RepeatIcon } from '@chakra-ui/icons';
 import { Project } from '../types';
 
 interface PromptInterfaceProps {
@@ -25,42 +31,108 @@ const PromptInterface: React.FC = ({ project }) => {
   const [loading, setLoading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
+  const [models, setModels] = useState([]);
+  const [reasoningModel, setReasoningModel] = useState('');
+  const [regularModel, setRegularModel] = useState('');
   const toast = useToast();
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const responseBg = useColorModeValue('blue.50', 'blue.900');
 
   useEffect(() => {
-    // Check API configuration
-    const checkApiConfig = async () => {
+    // Load API configuration and models
+    const loadInitialData = async () => {
       try {
+        // Get API config
         const config = await window.electron.getApiConfig();
         setApiInfo(config);
+
+        // Only fetch models if API URL is configured
+        if (config && config.url) {
+          // Get available models
+          const modelsList = await window.electron.getModels();
+          setModels(modelsList);
+
+          // Get saved preferences
+          const preferences = await window.electron.getPreferences();
+
+          // Set model values based on preferences, falling back to config defaults
+          if (preferences.reasoningModel && modelsList.some(m => m.id === preferences.reasoningModel)) {
+            setReasoningModel(preferences.reasoningModel);
+          } else if (config?.model && modelsList.some(m => m.id === config.model)) {
+            setReasoningModel(config.model);
+          } else if (modelsList.length > 0) {
+            setReasoningModel(modelsList[0].id);
+          }
+
+          if (preferences.regularModel && modelsList.some(m => m.id === preferences.regularModel)) {
+            setRegularModel(preferences.regularModel);
+          } else if (config?.model && modelsList.some(m => m.id === config.model)) {
+            setRegularModel(config.model);
+          } else if (modelsList.length > 0) {
+            setRegularModel(modelsList[0].id);
+          }
+        }
       } catch (error) {
-        console.error("Failed to get API config:", error);
+        console.error("Failed to load initial data:", error);
       }
     };
 
-    checkApiConfig();
+    loadInitialData();
   }, []);
 
+  // Save preferences when models change
   useEffect(() => {
-    // Generate context when project changes
-    const generateContext = async () => {
-      if (project.folders.length > 0) {
-        setContextLoading(true);
+    const savePreferences = async () => {
+      if (reasoningModel && regularModel) {
         try {
-          const content = await window.electron.generateContext(project.folders);
-          setContext(content);
+          await window.electron.saveModelPreferences({
+            reasoningModel,
+            regularModel
+          });
         } catch (error) {
-          console.error('Failed to generate context:', error);
-        } finally {
-          setContextLoading(false);
+          console.error("Failed to save model preferences:", error);
         }
       }
     };
 
-    generateContext();
+    if (reasoningModel && regularModel) {
+      savePreferences();
+    }
+  }, [reasoningModel, regularModel]);
+
+  // Extract the context generation logic into a separate function
+  const regenerateContext = async () => {
+    if (project.folders.length > 0) {
+      setContextLoading(true);
+      try {
+        const content = await window.electron.generateContext(project.folders);
+        setContext(content);
+        toast({
+          title: "Context refreshed",
+          description: "Project context has been regenerated successfully",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        console.error('Failed to generate context:', error);
+        toast({
+          title: "Refresh failed",
+          description: "Failed to regenerate context",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      } finally {
+        setContextLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Generate context when project changes
+    regenerateContext();
   }, [project]);
 
   const handleSubmit = async () => {
@@ -71,12 +143,14 @@ const PromptInterface: React.FC = ({ project }) => {
       const result = await window.electron.sendPrompt({
         prompt,
         context,
-        projectFolders: project.folders
+        projectFolders: project.folders,
+        reasoningModel,
+        regularModel
       });
       setResponse(result.response || JSON.stringify(result));
       toast({
         title: "Process completed",
-        description: "First response displayed. Second response saved to output.txt",
+        description: "First response displayed. Second response saved as update.sh",
         status: "success",
         duration: 5000,
         isClosable: true,
@@ -126,61 +200,110 @@ const PromptInterface: React.FC = ({ project }) => {
         </Alert>
       )}
 
-      <VStack align="stretch" spacing={4} mb={6}>
-        <Heading size="sm">Prompt</Heading>
-        <Textarea
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="Enter your prompt here..."
-          size="md"
-          rows={5}
-          mb={2}
-        />
+      <VStack spacing={4} align="stretch">
+        <FormControl>
+          <FormLabel>Prompt</FormLabel>
+          <Textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            placeholder="Enter your prompt here..."
+            size="md"
+            rows={5}
+            mb={2}
+          />
+        </FormControl>
 
-        <Button
-          mr={2}
-          onClick={handleCopyPrompt}
-          isDisabled={!prompt.trim() || contextLoading || !context.trim()}
-        >
-          Copy Full Prompt ({prompt.length + context.length} characters)
-        </Button>
+        {/* Only show model selection when API URL is configured */}
+        {apiInfo?.url && models.length > 0 && (
+          <HStack spacing={4}>
+            <FormControl>
+              <FormLabel>Reasoning Model (First Prompt)</FormLabel>
+              <Select
+                value={reasoningModel}
+                onChange={(e) => setReasoningModel(e.target.value)}
+              >
+                {models.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
 
-        {apiInfo?.url && (
+            <FormControl>
+              <FormLabel>Regular Model (Update Script)</FormLabel>
+              <Select
+                value={regularModel}
+                onChange={(e) => setRegularModel(e.target.value)}
+              >
+                {models.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          </HStack>
+        )}
+
+        <Flex>
           <Button
-            colorScheme="blue"
-            onClick={handleSubmit}
-            isLoading={loading}
-            loadingText="Sending..."
+            mr={2}
+            onClick={handleCopyPrompt}
             isDisabled={!prompt.trim() || contextLoading || !context.trim()}
           >
-            Send
+            Copy Full Prompt ({prompt.length + context.length} characters)
           </Button>
-        )}
+
+          {apiInfo?.url && (
+            <Button
+              colorScheme="blue"
+              onClick={handleSubmit}
+              isLoading={loading}
+              loadingText="Sending..."
+              isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+            >
+              Send
+            </Button>
+          )}
+        </Flex>
       </VStack>
 
-      <Box mb={6}>
-        <Heading size="sm" mb={2}>
-          Context
-        </Heading>
+      <Box mt={6}>
+        <Flex justify="space-between" align="center" mb={2}>
+          <Heading size="sm">
+            Context
+          </Heading>
+          <Button
+            leftIcon={<RepeatIcon />}
+            onClick={regenerateContext}
+            isLoading={contextLoading}
+            loadingText="Refreshing..."
+            colorScheme="teal"
+            size="sm"
+          >
+            Refresh Context
+          </Button>
+        </Flex>
         {contextLoading ? (
           <Text>
             Loading context...
           </Text>
         ) : (
-          <Text
+          <Box
             bg={bgColor}
             p={3}
             borderRadius="md"
             fontSize="sm"
           >
             {context.length} characters total
-          </Text>
+          </Box>
         )}
       </Box>
 
       {response && (
-        <Box>
-          <Heading size="sm" mb={2}>
+        <VStack mt={6} align="stretch">
+          <Heading size="sm">
             Response
           </Heading>
           <Box
@@ -191,7 +314,7 @@ const PromptInterface: React.FC = ({ project }) => {
           >
             {response}
           </Box>
-        </Box>
+        </VStack>
       )}
     </Box>
   );

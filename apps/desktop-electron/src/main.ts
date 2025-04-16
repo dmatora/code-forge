@@ -7,6 +7,7 @@ import { join } from 'path';
 import ProjectService from './app/services/project.service';
 import FileService from './app/services/file.service';
 import ApiService from './app/services/api.service';
+import PreferencesService from './app/services/preferences.service';
 
 export default class Main {
   static initialize() {
@@ -37,6 +38,7 @@ export default class Main {
     new ProjectService(projectsPath);
     new FileService();
     new ApiService();
+    new PreferencesService(); // Initialize preferences service
   }
 }
 
