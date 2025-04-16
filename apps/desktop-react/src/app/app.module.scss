@@ -1,1 +1,79 @@
-/* Your styles goes here. */
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: sans-serif;
+
+  header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+
+    h1 {
+      font-size: 24px;
+      color: #333;
+    }
+  }
+
+  main {
+    min-height: 500px;
+  }
+
+  .project-list {
+    ul {
+      list-style: none;
+      padding: 0;
+
+      li {
+        padding: 15px;
+        border: 1px solid #eee;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+          background-color: #f8f8f8;
+        }
+
+        h3 {
+          margin-top: 0;
+        }
+      }
+    }
+  }
+
+  .prompt-interface {
+    .context-preview {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow: auto;
+      max-height: 200px;
+      font-family: monospace;
+    }
+
+    .prompt-section {
+      margin-top: 20px;
+
+      textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+    }
+
+    .response-section {
+      margin-top: 20px;
+
+      .response-content {
+        background-color: #f0f8ff;
+        padding: 15px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+      }
+    }
+  }
+}

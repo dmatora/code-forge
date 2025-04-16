@@ -3,6 +3,10 @@ import ElectronEvents from './app/events/electron.events';
 import UpdateEvents from './app/events/update.events';
 import { app, BrowserWindow } from 'electron';
 import App from './app/app';
+import { join } from 'path';
+import ProjectService from './app/services/project.service';
+import FileService from './app/services/file.service';
+import ApiService from './app/services/api.service';
 
 export default class Main {
   static initialize() {
@@ -24,10 +28,23 @@ export default class Main {
       // UpdateEvents.initAutoUpdateService();
     }
   }
+
+  static initializeServices() {
+    const userDataPath = app.getPath('userData');
+    const projectsPath = join(userDataPath, 'projects.json');
+
+    // Initialize services
+    new ProjectService(projectsPath);
+    new FileService();
+    new ApiService();
+  }
 }
 
 // handle setup events as quickly as possible
 Main.initialize();
+
+// initialize services
+Main.initializeServices();
 
 // bootstrap app
 Main.bootstrapApp();
