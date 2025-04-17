@@ -22,16 +22,17 @@ import { Project } from '../types';
 
 interface PromptInterfaceProps {
   project: Project;
+  onOpenApiConfig?: () => void; // Add this prop
 }
 
-const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
+const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiConfig }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
-  const [models, setModels] = useState<Array<{id: string, name: string}>>([]);
+  const [models, setModels] = useState<any[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
   const toast = useToast();
@@ -186,8 +187,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
   };
 
   return (
-    <Box>
-      <Heading size="md" mb={4}>
+    <Box p={5}>
+      <Heading size="lg" mb={6}>
         Project: {project.name}
       </Heading>
 
@@ -195,13 +196,16 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
         <Alert status="warning" mb={4}>
           <AlertTitle>API Not Configured</AlertTitle>
           <AlertDescription>
-            Please set the OPENAI_URL environment variable to use automatic patch generation
+            Please configure the API URL to use automatic patch generation
+            {onOpenApiConfig && (
+              <Button size="sm" colorScheme="blue" ml={4} onClick={onOpenApiConfig}>Configure API</Button>
+            )}
           </AlertDescription>
         </Alert>
       )}
 
-      <VStack spacing={4} align="stretch">
-        <FormControl>
+      <Box mb={6}>
+        <FormControl mb={4}>
           <FormLabel>Prompt</FormLabel>
           <Textarea
             value={prompt}
@@ -215,7 +219,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
 
         {/* Only show model selection when API URL is configured */}
         {apiInfo?.url && models.length > 0 && (
-          <HStack spacing={4}>
+          <Flex gap={4} mb={4}>
             <FormControl>
               <FormLabel>Reasoning Model (First Prompt)</FormLabel>
               <Select
@@ -243,7 +247,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
                 ))}
               </Select>
             </FormControl>
-          </HStack>
+          </Flex>
         )}
 
         <Flex>
@@ -267,11 +271,11 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
             </Button>
           )}
         </Flex>
-      </VStack>
+      </Box>
 
-      <Box mt={6}>
+      <Box mb={6}>
         <Flex justify="space-between" align="center" mb={2}>
-          <Heading size="sm">
+          <Heading size="md">
             Context
           </Heading>
           <Button
@@ -286,9 +290,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
           </Button>
         </Flex>
         {contextLoading ? (
-          <Text>
+          <Box p={3}>
             Loading context...
-          </Text>
+          </Box>
         ) : (
           <Box
             bg={bgColor}
@@ -302,8 +306,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
       </Box>
 
       {response && (
-        <VStack mt={6} align="stretch">
-          <Heading size="sm">
+        <Box mb={6}>
+          <Heading size="md" mb={2}>
             Response
           </Heading>
           <Box
@@ -313,11 +317,11 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
             whiteSpace="pre-wrap"
           >
             {response}
-          </Box>
-        </VStack>
-      )}
-    </Box>
-  );
+            </Box>
+       </Box>
+     )}
+   </Box>
+ );
 };
 
 export default PromptInterface;

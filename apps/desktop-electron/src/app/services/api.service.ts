@@ -25,41 +25,65 @@ function removeFirstAndLastLines(text) {
 
 export class ApiService {
   private apiUrl: string;
+  private apiKey: string;
   private defaultModel: string;
   private openaiClient;
   private modelsFilePath: string; // Path to models.json file
 
   constructor() {
-    // Read from environment variables
-    this.apiUrl = process.env.OPENAI_URL || '';
-    this.defaultModel = process.env.OPENAI_MODEL || '';
+    // Load from preferences first, then fall back to environment variables
+    this.loadApiConfigFromPreferences();
 
     // Set path to models.json in the user data directory
     this.modelsFilePath = path.join(app.getPath('userData'), 'models.json');
 
-    // Only initialize models if API URL is configured
-    if (this.apiUrl) {
-      // Check for models.json and fetch models if needed
-      this.initializeModels();
-      
-      // Initialize OpenAI client
-      this.openaiClient = createOpenAI({
-        baseURL: this.apiUrl,
-        apiKey: process.env.OPENAI_API_KEY || 'dummy-key' // Some providers still require an API key
-      });
-    } else {
-      // If models.json exists, remove it to ensure consistent behavior
-      if (fs.existsSync(this.modelsFilePath)) {
-        try {
-          fs.unlinkSync(this.modelsFilePath);
-          console.log(`Removed ${this.modelsFilePath} since API is not configured`);
-        } catch (error) {
-          console.error(`Failed to remove ${this.modelsFilePath}:`, error);
-        }
+    // Setup IPC handlers first, so they're available even before API is configured
+    this.setupIpcHandlers();
+  }
+
+  private async loadApiConfigFromPreferences() {
+    try {
+      const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
+
+      if (fs.existsSync(preferencesFilePath)) {
+        const data = fs.readFileSync(preferencesFilePath, 'utf8');
+        const preferences = JSON.parse(data);
+
+        // Use API URL and key from preferences, fall back to environment variables
+        this.apiUrl = preferences.apiUrl || process.env.OPENAI_URL || '';
+        this.apiKey = preferences.apiKey || process.env.OPENAI_API_KEY || '';
+        this.defaultModel = preferences.reasoningModel || process.env.OPENAI_MODEL || '';
+      } else {
+        // Fall back to environment variables
+        this.apiUrl = process.env.OPENAI_URL || '';
+        this.apiKey = process.env.OPENAI_API_KEY || '';
+        this.defaultModel = process.env.OPENAI_MODEL || '';
+      }
+
+      // Initialize client if API URL is available
+      if (this.apiUrl) {
+        this.initializeModels();
+        this.initializeClient();
+      }
+    } catch (error) {
+      console.error('Failed to load API config from preferences:', error);
+      this.apiUrl = process.env.OPENAI_URL || '';
+      this.apiKey = process.env.OPENAI_API_KEY || '';
+      this.defaultModel = process.env.OPENAI_MODEL || '';
+
+      if (this.apiUrl) {
+        this.initializeModels();
+        this.initializeClient();
       }
     }
+  }
 
-    this.setupIpcHandlers();
+  private initializeClient() {
+    this.openaiClient = createOpenAI({
+      baseURL: this.apiUrl,
+      apiKey: this.apiKey || 'dummy-key'
+    });
+    console.log(`OpenAI client initialized with API URL: ${this.apiUrl}`);
   }
 
   private async initializeModels() {
@@ -88,7 +112,7 @@ export class ApiService {
     try {
       const response = await fetch(`${this.apiUrl}/models`, {
         headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'dummy-key'}`
+          'Authorization': `Bearer ${this.apiKey || 'dummy-key'}`
         }
       });
 
@@ -153,9 +177,52 @@ export class ApiService {
     ipcMain.handle('get-api-config', () => {
       return {
         url: this.apiUrl,
+        key: this.apiKey,
         maxRetries: 0,
         model: this.defaultModel
       };
+    });
+
+    ipcMain.handle('update-api-config', async (_, config: { apiUrl: string, apiKey: string }) => {
+      try {
+        // Update the API URL and key
+        this.apiUrl = config.apiUrl;
+        this.apiKey = config.apiKey || '';
+
+        // Save to preferences
+        const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
+        let preferences = {};
+
+        if (fs.existsSync(preferencesFilePath)) {
+          const data = fs.readFileSync(preferencesFilePath, 'utf8');
+          preferences = JSON.parse(data);
+        }
+
+        preferences = {
+          ...preferences,
+          apiUrl: config.apiUrl,
+          apiKey: config.apiKey
+        };
+
+        fs.writeFileSync(preferencesFilePath, JSON.stringify(preferences, null, 2));
+
+        // Re-initialize client and models if URL provided
+        if (this.apiUrl) {
+          this.initializeClient();
+          await this.fetchAndSaveModels();
+          return { success: true, url: this.apiUrl };
+        } else {
+          // If API URL is cleared, remove models.json
+          if (fs.existsSync(this.modelsFilePath)) {
+            fs.unlinkSync(this.modelsFilePath);
+          }
+          this.openaiClient = null;
+          return { success: true, url: '' };
+        }
+      } catch (error) {
+        console.error('Failed to update API config:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle('send-prompt', async (_, { prompt, context, projectFolders, reasoningModel, regularModel }) => {

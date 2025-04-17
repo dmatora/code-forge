@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // API
   getApiConfig: () => ipcRenderer.invoke('get-api-config'),
+  updateApiConfig: (config) => ipcRenderer.invoke('update-api-config', config),
   sendPrompt: (data) => ipcRenderer.invoke('send-prompt', data),
   getModels: () => ipcRenderer.invoke('get-models'), // Get available models
   

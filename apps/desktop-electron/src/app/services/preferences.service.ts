@@ -6,6 +6,8 @@ import * as path from 'path';
 export interface ModelPreferences {
   reasoningModel?: string;
   regularModel?: string;
+  apiUrl?: string;
+  apiKey?: string;
 }
 
 export class PreferencesService {
