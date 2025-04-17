@@ -29,6 +29,7 @@ interface ElectronAPI {
     scopeId?: string;
     reasoningModel?: string;
     regularModel?: string;
+    useTwoStep?: boolean;
   }) => Promise<any>;
   getModels: () => Promise<any[]>;
   refreshModels: (config?: { apiUrl?: string; apiKey?: string }) => Promise<{ success: boolean, models?: any[], error?: string }>;

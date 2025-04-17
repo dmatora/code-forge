@@ -16,9 +16,11 @@ import {
   FormLabel,
   HStack,
   Flex,
-  IconButton
+  IconButton,
+  Switch,
+  Tooltip
 } from '@chakra-ui/react';
-import { RepeatIcon, ChevronLeftIcon } from '@chakra-ui/icons';
+import { RepeatIcon, ChevronLeftIcon, InfoIcon } from '@chakra-ui/icons';
 import { Project, Scope } from '../types';
 import { Model } from '../types/model';
 
@@ -44,6 +46,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const [models, setModels] = useState<Model[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
+  const [useTwoStep, setUseTwoStep] = useState(true); // Default to two-step process
   const toast = useToast();
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
@@ -153,15 +156,18 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
       const result = await window.electron.sendPrompt({
         prompt,
         context,
-        projectId: project.id,  // Pass project ID for update.sh location
-        scopeId: scope.id,      // Pass scope ID for reference
+        projectId: project.id,
+        scopeId: scope.id,
         reasoningModel,
-        regularModel
+        regularModel,
+        useTwoStep
       });
       setResponse(result.response || JSON.stringify(result));
       toast({
         title: "Process completed",
-        description: "First response displayed. Second response saved as update.sh in project root folder.",
+        description: useTwoStep ?
+          "First response displayed. Second response saved as update.sh in project root folder." :
+          "Response saved as update.sh in project root folder.",
         status: "success",
         duration: 5000,
         isClosable: true,
@@ -175,7 +181,17 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   };
 
   const handleCopyPrompt = () => {
-    const fullPrompt = `${prompt}\n\nContext:\n${context}`;
+    let fullPrompt: string;
+
+    if (useTwoStep) {
+      // Two-step process: Copy prompt + context as is
+      fullPrompt = `${prompt}\n\nContext:\n${context}`;
+    } else {
+      // One-step process: Use the same instruction as in api.service.ts
+      const oneStepInstruction = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.`;
+      fullPrompt = `${oneStepInstruction}\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
+    }
+
     navigator.clipboard.writeText(fullPrompt).then(() => {
       toast({
         title: "Prompt copied",
@@ -205,10 +221,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           onClick={onBack}
           mr={2}
         />
-        <Heading size="lg">
-          Project: {project.name}
-          <Text as="span" fontSize="md" fontWeight="normal" ml={2}>/ Scope: {scope.name}</Text>
-        </Heading>
+        <Box>
+          <Heading size="md">Project: {project.name}</Heading>
+          <Text>/ Scope: {scope.name}</Text>
+        </Box>
       </Flex>
 
       {!apiInfo?.url && (
@@ -217,7 +233,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button mt={2} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
+              <Button colorScheme="blue" ml={4} onClick={onOpenApiConfig}>Configure API</Button>
             )}
           </AlertDescription>
         </Alert>
@@ -236,11 +252,29 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           />
         </FormControl>
 
+        {/* Add the checkbox for two-step process toggle */}
+        <FormControl display="flex" alignItems="center">
+          <FormLabel htmlFor="two-step-process" mb="0">
+            Use two-step patching process
+          </FormLabel>
+          <Switch
+            id="two-step-process"
+            isChecked={useTwoStep}
+            onChange={(e) => setUseTwoStep(e.target.checked)}
+            mr={2}
+          />
+          <Tooltip label="Two-step process generates a detailed solution first, then creates the update script. One-step process creates the update script directly (faster but may be less accurate for complex tasks).">
+            <InfoIcon color="gray.500" />
+          </Tooltip>
+        </FormControl>
+
         {/* Only show model selection when API URL is configured */}
         {apiInfo?.url && models.length > 0 && (
-          <Flex gap={4}>
-            <FormControl flex="1">
-              <FormLabel>Reasoning Model (First Prompt)</FormLabel>
+          <HStack spacing={4} wrap="wrap">
+            <FormControl flex="1" minW="250px">
+              <FormLabel>
+                {useTwoStep ? "Reasoning Model (First Prompt)" : "Model"}
+              </FormLabel>
               <Select
                 value={reasoningModel}
                 onChange={(e) => setReasoningModel(e.target.value)}
@@ -253,20 +287,22 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
               </Select>
             </FormControl>
 
-            <FormControl flex="1">
-              <FormLabel>Regular Model (Update Script)</FormLabel>
-              <Select
-                value={regularModel}
-                onChange={(e) => setRegularModel(e.target.value)}
-              >
-                {models.map(model => (
-                  <option key={model.id} value={model.id}>
-                    {model.name || model.id}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-          </Flex>
+            {useTwoStep && (
+              <FormControl flex="1" minW="250px">
+                <FormLabel>Regular Model (Update Script)</FormLabel>
+                <Select
+                  value={regularModel}
+                  onChange={(e) => setRegularModel(e.target.value)}
+                >
+                  {models.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.name || model.id}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          </HStack>
         )}
 
         <Flex>
@@ -294,7 +330,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
       <Box mt={6}>
         <Flex justify="space-between" align="center" mb={2}>
-          <Heading size="md">
+          <Heading size="sm">
             Context
           </Heading>
           <Button
@@ -309,9 +345,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           </Button>
         </Flex>
         {contextLoading ? (
-          <Box p={3}>
+          <Text py={4}>
             Loading context...
-          </Box>
+          </Text>
         ) : (
           <Box
             bg={bgColor}
@@ -326,7 +362,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
       {response && (
         <Box mt={6}>
-          <Heading size="md" mb={2}>
+          <Heading size="sm" mb={2}>
             Response
           </Heading>
           <Box

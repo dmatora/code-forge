@@ -312,7 +312,7 @@ export class ApiService {
       }
     });
 
-    ipcMain.handle('send-prompt', async (_, { prompt, context, projectId, scopeId, reasoningModel, regularModel }) => {
+    ipcMain.handle('send-prompt', async (_, { prompt, context, projectId, scopeId, reasoningModel, regularModel, useTwoStep = true }) => {
       if (!this.apiUrl || !this.openaiClient) {
         throw new Error('API not configured. Please set OPENAI_URL environment variable.');
       }
@@ -321,49 +321,14 @@ export class ApiService {
       const firstModel = reasoningModel || this.defaultModel;
       const secondModel = regularModel || this.defaultModel;
 
+      console.log(`Using ${useTwoStep ? 'two-step' : 'one-step'} process`);
       console.log(`Using reasoning model: ${firstModel}`);
-      console.log(`Using regular model: ${secondModel}`);
+      if (useTwoStep) {
+        console.log(`Using regular model: ${secondModel}`);
+      }
 
       try {
-        // Start timing
-        const startTime = performance.now();
-
-        // First request with reasoning model
-        const firstResult = await generateText({
-          model: this.openaiClient(firstModel),
-          messages: [
-            { role: 'user', content: `${prompt}\n\n${context}` }
-          ]
-        });
-
-        // Measure first prompt time
-        const firstPromptTime = performance.now() - startTime;
-
-        // Second request with regular model
-        console.log('Sending second request...');
-        const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
-        const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
-
-        const secondStartTime = performance.now();
-        const secondResult = await generateText({
-          model: this.openaiClient(secondModel),
-          messages: [
-            { role: 'user', content: secondPrompt }
-          ]
-        });
-
-        // Measure second prompt time
-        const secondPromptTime = performance.now() - secondStartTime;
-
-        // Calculate total time
-        const totalTime = performance.now() - startTime;
-
-        // Format times to be more readable
-        const firstPromptFormatted = formatProcessingTime(firstPromptTime);
-        const secondPromptFormatted = formatProcessingTime(secondPromptTime);
-        const totalFormatted = formatProcessingTime(totalTime);
-
-        // Get the project and scope data directly from files
+        // Get the project and scope data first to make sure we have it for notifications
         const userDataPath = app.getPath('userData');
         const projectsPath = path.join(userDataPath, 'projects.json');
         const scopesPath = path.join(userDataPath, 'scopes.json');
@@ -386,24 +351,91 @@ export class ApiService {
         }
         const scope = scopes.find(s => s.id === scopeId);
 
-        if (project && project.rootFolder && scope) {
-          const outputPath = path.join(project.rootFolder, 'update.sh');
-
-          // Apply function to extract code block
-          const processedText = extractCodeBlock(secondResult.text);
-
-          fs.writeFileSync(outputPath, processedText);
-          console.log(`Saved processed response to ${outputPath}`);
-
-          // Send Telegram notification with timing information
-          const notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
-          await this.sendTelegramNotification(notificationMessage);
-        } else {
-          console.error('Project root folder or scope not found, cannot save update.sh');
+        if (!project || !project.rootFolder || !scope) {
+          throw new Error('Project root folder or scope not found, cannot save update.sh');
         }
 
-        // Return the first response to the user
-        return { response: firstResult.text };
+        // Start timing
+        const startTime = performance.now();
+        let responseText;
+        let processedText;
+        let notificationMessage;
+
+        if (useTwoStep) {
+          // First request with reasoning model
+          const firstResult = await generateText({
+            model: this.openaiClient(firstModel),
+            messages: [
+              { role: 'user', content: `${prompt}\n\n${context}` }
+            ]
+          });
+
+          // Measure first prompt time
+          const firstPromptTime = performance.now() - startTime;
+
+          // Second request with regular model
+          console.log('Sending second request...');
+          const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
+          const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
+
+          const secondStartTime = performance.now();
+          const secondResult = await generateText({
+            model: this.openaiClient(secondModel),
+            messages: [
+              { role: 'user', content: secondPrompt }
+            ]
+          });
+
+          // Measure second prompt time
+          const secondPromptTime = performance.now() - secondStartTime;
+
+          // Calculate total time
+          const totalTime = performance.now() - startTime;
+
+          // Format times to be more readable
+          const firstPromptFormatted = formatProcessingTime(firstPromptTime);
+          const secondPromptFormatted = formatProcessingTime(secondPromptTime);
+          const totalFormatted = formatProcessingTime(totalTime);
+
+          // Use first result as response, second result for update script
+          responseText = firstResult.text;
+          processedText = extractCodeBlock(secondResult.text);
+
+          // Create notification message for two-step process
+          notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
+        } else {
+          // One-step process: direct shell script generation
+          const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
+
+          const oneStepResult = await generateText({
+            model: this.openaiClient(firstModel),
+            messages: [
+              { role: 'user', content: oneStepPrompt }
+            ]
+          });
+
+          // Process the single response
+          responseText = oneStepResult.text;
+          processedText = extractCodeBlock(oneStepResult.text);
+
+          // Calculate total time for one-step process
+          const totalTime = performance.now() - startTime;
+          const totalFormatted = formatProcessingTime(totalTime);
+
+          // Create notification message for one-step process
+          notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ One-step processing time: ${totalFormatted}`;
+        }
+
+        // Save the output file
+        const outputPath = path.join(project.rootFolder, 'update.sh');
+        fs.writeFileSync(outputPath, processedText);
+        console.log(`Saved processed response to ${outputPath}`);
+
+        // Send the notification
+        await this.sendTelegramNotification(notificationMessage);
+
+        // Return the response to the user
+        return { response: responseText };
       } catch (error) {
         console.error('API request failed:', error);
         throw error;
