@@ -17,6 +17,7 @@ import {
   ListItem
 } from '@chakra-ui/react';
 import { RepeatIcon } from '@chakra-ui/icons';
+import { Model } from '../types/model';
 
 const ApiConfigForm: React.FC<{
   onSave: () => void;
@@ -25,7 +26,7 @@ const ApiConfigForm: React.FC<{
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [models, setModels] = useState([]);
+  const [models, setModels] = useState<Model[]>([]);
   const [refreshingModels, setRefreshingModels] = useState(false);
   const toast = useToast();
 
@@ -107,10 +108,10 @@ const ApiConfigForm: React.FC<{
     try {
       const result = await window.electron.refreshModels({ apiUrl, apiKey });
       if (result.success) {
-        setModels(result.models);
+        setModels(result.models || []);
         toast({
           title: 'Models refreshed',
-          description: `Found ${result.models.length} models`,
+          description: `Found ${result.models?.length || 0} models`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -139,13 +140,13 @@ const ApiConfigForm: React.FC<{
   };
 
   return (
-    <Box p={5}>
-      <Heading size="lg" mb={6}>
+    <Box maxW="800px" mx="auto" p={4}>
+      <Heading as="h1" mb={6}>
         API Configuration
       </Heading>
 
-      <VStack spacing={4} align="start">
-        <FormControl>
+      <VStack spacing={6} align="stretch">
+        <FormControl id="api-url">
           <FormLabel>API URL</FormLabel>
           <Input
             value={apiUrl}
@@ -154,7 +155,7 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <FormControl>
+        <FormControl id="api-key">
           <FormLabel>API Key</FormLabel>
           <Input
             value={apiKey}
@@ -164,17 +165,19 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <Alert status="info" borderRadius="md">
+        <Alert status="info">
           <AlertIcon />
-          <Text>
+          <Text fontSize="sm">
             Enter the base URL for your OpenAI-compatible API and your API key. This setting will apply to all projects.
           </Text>
         </Alert>
 
         {/* Models section */}
-        <Box w="full" mt={4}>
-          <Flex justify="space-between" align="center" mb={2}>
-            <Heading size="md">Available Models</Heading>
+        <Box mt={4}>
+          <Flex justifyContent="space-between" alignItems="center" mb={2}>
+            <Heading as="h3" size="md">
+              Available Models
+            </Heading>
             <Button
               leftIcon={<RepeatIcon />}
               onClick={handleRefreshModels}
@@ -189,31 +192,31 @@ const ApiConfigForm: React.FC<{
           </Flex>
 
           {models.length > 0 ? (
-            <Box borderWidth="1px" borderRadius="md" p={2}>
-              <List spacing={1}>
-                {models.map((model, index) => (
-                  <ListItem key={index}>
-                    {model.name || model.id}
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
+            <List spacing={1}>
+              {models.map((model, index) => (
+                <ListItem key={index} p={2} borderWidth="1px" borderRadius="md">
+                  {model.name || model.id}
+                </ListItem>
+              ))}
+            </List>
           ) : (
-            <Box p={4} borderWidth="1px" borderRadius="md">
+            <Text color="gray.600">
               {refreshingModels ? (
-                <Flex align="center">
-                  <Spinner size="sm" mr={2}/>
+                <Flex alignItems="center">
+                  <Spinner size="sm" mr={2} />
                   Loading models...
                 </Flex>
               ) : (
-                <Text>No models available. Configure API URL and click Refresh.</Text>
+                "No models available. Configure API URL and click Refresh."
               )}
-            </Box>
+            </Text>
           )}
         </Box>
 
-        <Flex w="full" justify="space-between" mt={4}>
-          <Button onClick={onCancel} variant="outline">Cancel</Button>
+        <Flex justify="flex-end" mt={6}>
+          <Button mr={3} onClick={onCancel}>
+            Cancel
+          </Button>
           <Button
             colorScheme="blue"
             onClick={handleSave}

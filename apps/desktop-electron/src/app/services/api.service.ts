@@ -176,7 +176,7 @@ export class ApiService {
         if (!this.apiUrl) {
           return [];
         }
-        
+
         if (fs.existsSync(this.modelsFilePath)) {
           const data = fs.readFileSync(this.modelsFilePath, 'utf8');
           return JSON.parse(data);
@@ -265,7 +265,7 @@ export class ApiService {
       }
     });
 
-    ipcMain.handle('send-prompt', async (_, { prompt, context, projectFolders, reasoningModel, regularModel }) => {
+    ipcMain.handle('send-prompt', async (_, { prompt, context, projectId, scopeId, reasoningModel, regularModel }) => {
       if (!this.apiUrl || !this.openaiClient) {
         throw new Error('API not configured. Please set OPENAI_URL environment variable.');
       }
@@ -273,7 +273,7 @@ export class ApiService {
       // Use provided models or fall back to default
       const firstModel = reasoningModel || this.defaultModel;
       const secondModel = regularModel || this.defaultModel;
-      
+
       console.log(`Using reasoning model: ${firstModel}`);
       console.log(`Using regular model: ${secondModel}`);
 
@@ -297,10 +297,12 @@ export class ApiService {
           ]
         });
 
-        // Save the second result to update.sh in the project root, removing first and last lines
-        if (projectFolders && projectFolders.length > 0) {
-          const projectRoot = projectFolders[0]; // Use the first folder as the project root
-          const outputPath = path.join(projectRoot, 'update.sh');
+        // Get the project root folder from the project service
+        const projects = await ipcMain.handle('get-projects', undefined);
+        const project = projects.find(p => p.id === projectId);
+
+        if (project && project.rootFolder) {
+          const outputPath = path.join(project.rootFolder, 'update.sh');
 
           // Apply function to remove first and last lines
           const processedText = removeFirstAndLastLines(secondResult.text);
@@ -308,7 +310,7 @@ export class ApiService {
           fs.writeFileSync(outputPath, processedText);
           console.log(`Saved processed response to ${outputPath}`);
         } else {
-          console.error('No project folders provided, cannot save update.sh');
+          console.error('Project root folder not found, cannot save update.sh');
         }
 
         // Return the first response to the user

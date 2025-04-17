@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron';
 import App from './app/app';
 import { join } from 'path';
 import ProjectService from './app/services/project.service';
+import ScopeService from './app/services/scope.service';
 import FileService from './app/services/file.service';
 import ApiService from './app/services/api.service';
 import PreferencesService from './app/services/preferences.service';
@@ -33,12 +34,14 @@ export default class Main {
   static initializeServices() {
     const userDataPath = app.getPath('userData');
     const projectsPath = join(userDataPath, 'projects.json');
+    const scopesPath = join(userDataPath, 'scopes.json');
 
     // Initialize services
     new ProjectService(projectsPath);
+    new ScopeService(scopesPath);
     new FileService();
     new ApiService();
-    new PreferencesService(); // Initialize preferences service
+    new PreferencesService();
   }
 }
 

@@ -7,6 +7,13 @@ interface ElectronAPI {
   createProject: (project: any) => Promise<any>;
   updateProject: (project: any) => Promise<any>;
   deleteProject: (id: string) => Promise<boolean>;
+  selectRootFolder: () => Promise<string>;
+
+  // Scope management
+  getScopes: (projectId?: string) => Promise<any[]>;
+  createScope: (scope: any) => Promise<any>;
+  updateScope: (scope: any) => Promise<any>;
+  deleteScope: (id: string) => Promise<boolean>;
 
   // File operations
   selectFolders: () => Promise<string[]>;
@@ -18,11 +25,12 @@ interface ElectronAPI {
   sendPrompt: (data: {
     prompt: string;
     context: string;
-    projectFolders?: string[];
+    projectId?: string;
+    scopeId?: string;
     reasoningModel?: string;
     regularModel?: string;
   }) => Promise<any>;
-  getModels: () => Promise<any[]>; // Get available models
+  getModels: () => Promise<any[]>;
   refreshModels: (config?: { apiUrl?: string; apiKey?: string }) => Promise<{ success: boolean, models?: any[], error?: string }>;
 
   // Preferences

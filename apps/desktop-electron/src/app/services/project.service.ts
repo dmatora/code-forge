@@ -2,11 +2,12 @@ import { ipcMain } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { dialog } from 'electron';
 
 export interface Project {
   id: string;
   name: string;
-  folders: string[];
+  rootFolder: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +48,7 @@ class ProjectService {
   private setupIpcHandlers() {
     ipcMain.handle('get-projects', () => this.projects);
 
-    ipcMain.handle('create-project', (_, projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    ipcMain.handle('create-project', (_, projectData) => {
       const newProject: Project = {
         ...projectData,
         id: uuidv4(),
@@ -77,6 +78,20 @@ class ProjectService {
       this.projects = this.projects.filter(p => p.id !== id);
       this.saveProjects();
       return true;
+    });
+
+    // Handler for selecting a single root folder
+    ipcMain.handle('select-root-folder', async () => {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        properties: ['openDirectory'],
+        multiSelections: false
+      });
+
+      if (canceled || filePaths.length === 0) {
+        return null;
+      }
+
+      return filePaths[0]; // Return just the single folder path
     });
   }
 }

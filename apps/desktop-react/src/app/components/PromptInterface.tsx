@@ -15,24 +15,33 @@ import {
   FormControl,
   FormLabel,
   HStack,
-  Flex
+  Flex,
+  IconButton
 } from '@chakra-ui/react';
-import { RepeatIcon } from '@chakra-ui/icons';
-import { Project } from '../types';
+import { RepeatIcon, ChevronLeftIcon } from '@chakra-ui/icons';
+import { Project, Scope } from '../types';
+import { Model } from '../types/model';
 
 interface PromptInterfaceProps {
   project: Project;
-  onOpenApiConfig?: () => void; // Add this prop
+  scope: Scope;
+  onBack: () => void;
+  onOpenApiConfig?: () => void;
 }
 
-const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiConfig }) => {
+const PromptInterface: React.FC<PromptInterfaceProps> = ({
+  project,
+  scope,
+  onBack,
+  onOpenApiConfig
+}) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
   const toast = useToast();
@@ -104,10 +113,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
 
   // Extract the context generation logic into a separate function
   const regenerateContext = async () => {
-    if (project.folders.length > 0) {
+    if (scope.folders.length > 0) {
       setContextLoading(true);
       try {
-        const content = await window.electron.generateContext(project.folders);
+        const content = await window.electron.generateContext(scope.folders);
         setContext(content);
         toast({
           title: "Context refreshed",
@@ -132,9 +141,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
   };
 
   useEffect(() => {
-    // Generate context when project changes
+    // Generate context when scope changes
     regenerateContext();
-  }, [project]);
+  }, [scope]);
 
   const handleSubmit = async () => {
     if (!prompt.trim()) return;
@@ -144,14 +153,15 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
       const result = await window.electron.sendPrompt({
         prompt,
         context,
-        projectFolders: project.folders,
+        projectId: project.id,  // Pass project ID for update.sh location
+        scopeId: scope.id,      // Pass scope ID for reference
         reasoningModel,
         regularModel
       });
       setResponse(result.response || JSON.stringify(result));
       toast({
         title: "Process completed",
-        description: "First response displayed. Second response saved as update.sh",
+        description: "First response displayed. Second response saved as update.sh in project root folder.",
         status: "success",
         duration: 5000,
         isClosable: true,
@@ -187,10 +197,19 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
   };
 
   return (
-    <Box p={5}>
-      <Heading size="lg" mb={6}>
-        Project: {project.name}
-      </Heading>
+    <Box>
+      <Flex align="center" mb={4}>
+        <IconButton
+          aria-label="Back"
+          icon={<ChevronLeftIcon />}
+          onClick={onBack}
+          mr={2}
+        />
+        <Heading size="lg">
+          Project: {project.name}
+          <Text as="span" fontSize="md" fontWeight="normal" ml={2}>/ Scope: {scope.name}</Text>
+        </Heading>
+      </Flex>
 
       {!apiInfo?.url && (
         <Alert status="warning" mb={4}>
@@ -198,14 +217,14 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button size="sm" colorScheme="blue" ml={4} onClick={onOpenApiConfig}>Configure API</Button>
+              <Button mt={2} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
             )}
           </AlertDescription>
         </Alert>
       )}
 
-      <Box mb={6}>
-        <FormControl mb={4}>
+      <VStack spacing={4} align="stretch">
+        <FormControl>
           <FormLabel>Prompt</FormLabel>
           <Textarea
             value={prompt}
@@ -219,8 +238,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
 
         {/* Only show model selection when API URL is configured */}
         {apiInfo?.url && models.length > 0 && (
-          <Flex gap={4} mb={4}>
-            <FormControl>
+          <Flex gap={4}>
+            <FormControl flex="1">
               <FormLabel>Reasoning Model (First Prompt)</FormLabel>
               <Select
                 value={reasoningModel}
@@ -228,13 +247,13 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
               >
                 {models.map(model => (
                   <option key={model.id} value={model.id}>
-                    {model.name}
+                    {model.name || model.id}
                   </option>
                 ))}
               </Select>
             </FormControl>
 
-            <FormControl>
+            <FormControl flex="1">
               <FormLabel>Regular Model (Update Script)</FormLabel>
               <Select
                 value={regularModel}
@@ -242,7 +261,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
               >
                 {models.map(model => (
                   <option key={model.id} value={model.id}>
-                    {model.name}
+                    {model.name || model.id}
                   </option>
                 ))}
               </Select>
@@ -271,9 +290,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
             </Button>
           )}
         </Flex>
-      </Box>
+      </VStack>
 
-      <Box mb={6}>
+      <Box mt={6}>
         <Flex justify="space-between" align="center" mb={2}>
           <Heading size="md">
             Context
@@ -306,7 +325,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
       </Box>
 
       {response && (
-        <Box mb={6}>
+        <Box mt={6}>
           <Heading size="md" mb={2}>
             Response
           </Heading>
@@ -317,11 +336,11 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({ project, onOpenApiCon
             whiteSpace="pre-wrap"
           >
             {response}
-            </Box>
-       </Box>
-     )}
-   </Box>
- );
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
 };
 
 export default PromptInterface;
