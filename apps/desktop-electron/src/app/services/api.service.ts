@@ -6,21 +6,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Removes the first and last line from a text string
+ * Extracts content between ```\n or ```bash\n and ```
  * @param {string} text - The input text
- * @returns {string} - Text with first and last lines removed
+ * @returns {string} - Extracted content or original text if no valid code block is found
  */
-function removeFirstAndLastLines(text) {
-  // Split the text into lines
-  const lines = text.split('\n');
+function extractCodeBlock(text) {
+  // Regular expression to match content between ``` or ```bash and ```
+  const regex = /```(?:bash)?\n([\s\S]*?)\n```/;
+  const match = text.match(regex);
 
-  // Return original text if there are less than 3 lines
-  if (lines.length < 3) {
-    return text;
-  }
-
-  // Remove first and last lines and join back together
-  return lines.slice(1, -1).join('\n');
+  // Return the captured group (content between delimiters) or original text if no match
+  return match ? match[1] : text;
 }
 
 export class ApiService {
@@ -304,8 +300,8 @@ export class ApiService {
         if (project && project.rootFolder) {
           const outputPath = path.join(project.rootFolder, 'update.sh');
 
-          // Apply function to remove first and last lines
-          const processedText = removeFirstAndLastLines(secondResult.text);
+          // Apply function to extract code block
+          const processedText = extractCodeBlock(secondResult.text);
 
           fs.writeFileSync(outputPath, processedText);
           console.log(`Saved processed response to ${outputPath}`);
