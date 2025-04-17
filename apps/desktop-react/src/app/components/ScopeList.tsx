@@ -29,9 +29,9 @@ const ScopeList: React.FC<{
   onEditProject?: () => void;
   onEditScope?: (scope: Scope) => void;
 }> = ({ project, onSelectScope, onCreateNew, onBack, onEditScope }) => {
-  const [scopes, setScopes] = useState([]);
+  const [scopes, setScopes] = useState<Scope[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scopeToDelete, setScopeToDelete] = useState(null);
+  const [scopeToDelete, setScopeToDelete] = useState<Scope | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
@@ -90,23 +90,23 @@ const ScopeList: React.FC<{
 
   return (
     <Box>
-      <Heading as="h2" size="lg" mb={2}>
+      <Flex mb={2} alignItems="center">
         <IconButton
           aria-label="Back to projects"
           icon={<ChevronLeftIcon />}
           onClick={onBack}
           mr={2}
         />
-        Project: {project.name}
-      </Heading>
+        <Heading as="h1" size="lg">Project: {project.name}</Heading>
+      </Flex>
       <Text mb={4}>Root folder: {project.rootFolder}</Text>
-      <Box mb={6}>
-        <Heading as="h3" size="md" mb={2}>Scopes</Heading>
-        <Button onClick={onCreateNew} colorScheme="blue">Create New Scope</Button>
-      </Box>
+      <Flex mb={4} justifyContent="space-between" alignItems="center">
+        <Heading as="h2" size="md">Scopes</Heading>
+        <Button size="sm" colorScheme="blue" onClick={onCreateNew}>Create New Scope</Button>
+      </Flex>
 
       {scopes.length === 0 ? (
-        <Box p={4} borderWidth="1px" borderRadius="md">
+        <Box p={4} shadow="md" borderWidth="1px" borderRadius="md">
           No scopes yet. Create your first scope to get started working with this project.
         </Box>
       ) : (
@@ -120,13 +120,13 @@ const ScopeList: React.FC<{
               borderRadius="md"
               _hover={{ bg: 'gray.50' }}
             >
-              <Flex align="center">
+              <Flex alignItems="center">
                 <Box
                   onClick={() => onSelectScope(scope)}
                   flex="1"
                   cursor="pointer"
                 >
-                  <Heading as="h3" size="md">{scope.name}</Heading>
+                  <Heading size="md">{scope.name}</Heading>
                   <Text>{scope.folders.length} folders</Text>
                   <Text fontSize="sm" color="gray.500">
                     Updated: {new Date(scope.updatedAt).toLocaleDateString()}
@@ -168,7 +168,7 @@ const ScopeList: React.FC<{
             This action cannot be undone.
           </ModalBody>
           <ModalFooter>
-            <Button mr={3} onClick={onClose}>Cancel</Button>
+            <Button variant="ghost" mr={3} onClick={onClose}>Cancel</Button>
             <Button colorScheme="red" onClick={confirmDelete}>Delete</Button>
           </ModalFooter>
         </ModalContent>

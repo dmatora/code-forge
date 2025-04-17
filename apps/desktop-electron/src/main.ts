@@ -1,11 +1,11 @@
 import SquirrelEvents from './app/events/squirrel.events';
 import ElectronEvents from './app/events/electron.events';
-import UpdateEvents from './app/events/update.events';
 import { app, BrowserWindow } from 'electron';
 import App from './app/app';
 import { join } from 'path';
-import ProjectService from './app/services/project.service';
+
 import ScopeService from './app/services/scope.service';
+import ProjectService from './app/services/project.service';
 import FileService from './app/services/file.service';
 import ApiService from './app/services/api.service';
 import PreferencesService from './app/services/preferences.service';
@@ -13,8 +13,7 @@ import PreferencesService from './app/services/preferences.service';
 export default class Main {
   static initialize() {
     if (SquirrelEvents.handleEvents()) {
-      // squirrel event handled (except first run event) and app will exit in 1000ms, so don't do anything else
-      app.quit();
+      app.quit(); // handled by squirrel
     }
   }
 
@@ -24,33 +23,29 @@ export default class Main {
 
   static bootstrapAppEvents() {
     ElectronEvents.bootstrapElectronEvents();
-
-    // initialize auto updater service
-    if (!App.isDevelopmentMode()) {
-      // UpdateEvents.initAutoUpdateService();
-    }
+    // if (!App.isDevelopmentMode()) UpdateEvents.initAutoUpdateService();
   }
 
   static initializeServices() {
-    const userDataPath = app.getPath('userData');
-    const projectsPath = join(userDataPath, 'projects.json');
-    const scopesPath = join(userDataPath, 'scopes.json');
+    const userData = app.getPath('userData');
+    const projectsPath = join(userData, 'projects.json');
+    const scopesPath   = join(userData, 'scopes.json');
 
-    // Initialize services
-    new ProjectService(projectsPath);
-    new ScopeService(scopesPath);
+    // create shared ScopeService first
+    const scopeService = new ScopeService(scopesPath);
+
+    // pass the singleton into ProjectService
+    new ProjectService(projectsPath, scopeService);
+
+    // other services (stateless)
     new FileService();
     new ApiService();
     new PreferencesService();
   }
 }
 
-// handle setup events as quickly as possible
+/* ---------- boot sequence ---------- */
 Main.initialize();
-
-// initialize services
 Main.initializeServices();
-
-// bootstrap app
 Main.bootstrapApp();
 Main.bootstrapAppEvents();

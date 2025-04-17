@@ -1,27 +1,23 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog } from 'electron';
 import fs from 'fs';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { dialog } from 'electron';
-
-export interface Project {
-  id: string;
-  name: string;
-  rootFolder: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { Project } from './types'; // adjust if you keep a shared types file
+import ScopeService, { Scope } from './scope.service';
 
 class ProjectService {
   private storagePath: string;
   private projects: Project[] = [];
+  private scopeService: ScopeService;
 
-  constructor(storagePath: string) {
+  constructor(storagePath: string, scopeService: ScopeService) {
     this.storagePath = storagePath;
+    this.scopeService = scopeService;
+
     this.loadProjects();
     this.setupIpcHandlers();
   }
 
+  /* ---------- internal helpers ---------- */
   private loadProjects() {
     try {
       if (fs.existsSync(this.storagePath)) {
@@ -31,8 +27,8 @@ class ProjectService {
         this.projects = [];
         this.saveProjects();
       }
-    } catch (error) {
-      console.error('Failed to load projects:', error);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
       this.projects = [];
     }
   }
@@ -40,58 +36,80 @@ class ProjectService {
   private saveProjects() {
     try {
       fs.writeFileSync(this.storagePath, JSON.stringify(this.projects, null, 2));
-    } catch (error) {
-      console.error('Failed to save projects:', error);
+    } catch (err) {
+      console.error('Failed to save projects:', err);
     }
   }
 
+  private createOrUpdateDefaultScope(projectId: string, rootFolder: string) {
+    const scopes = (this.scopeService as any).scopes as Scope[]; // quick internal access
+    const existing = scopes.find(
+      (s) => s.projectId === projectId && s.name === 'Entire Project'
+    );
+
+    if (existing) {
+      existing.folders = [rootFolder];
+      existing.updatedAt = new Date();
+    } else {
+      scopes.push({
+        id: uuidv4(),
+        name: 'Entire Project',
+        folders: [rootFolder],
+        projectId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    (this.scopeService as any).saveScopes();
+  }
+
+  /* ---------- IPC handlers ---------- */
   private setupIpcHandlers() {
     ipcMain.handle('get-projects', () => this.projects);
 
-    ipcMain.handle('create-project', (_, projectData) => {
-      const newProject: Project = {
-        ...projectData,
+    ipcMain.handle('create-project', (_, data) => {
+      const project: Project = {
+        ...data,
         id: uuidv4(),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
-      this.projects.push(newProject);
+      this.projects.push(project);
       this.saveProjects();
-      return newProject;
+
+      this.createOrUpdateDefaultScope(project.id, project.rootFolder);
+      return project;
     });
 
-    ipcMain.handle('update-project', (_, project: Project) => {
-      const index = this.projects.findIndex(p => p.id === project.id);
-      if (index !== -1) {
-        this.projects[index] = {
-          ...project,
-          updatedAt: new Date()
-        };
-        this.saveProjects();
-        return this.projects[index];
+    ipcMain.handle('update-project', (_, updated: Project) => {
+      const idx = this.projects.findIndex((p) => p.id === updated.id);
+      if (idx === -1) return null;
+
+      const rootChanged = this.projects[idx].rootFolder !== updated.rootFolder;
+
+      this.projects[idx] = { ...updated, updatedAt: new Date() };
+      this.saveProjects();
+
+      if (rootChanged) {
+        this.createOrUpdateDefaultScope(updated.id, updated.rootFolder);
       }
-      return null;
+      return this.projects[idx];
     });
 
     ipcMain.handle('delete-project', (_, id: string) => {
-      this.projects = this.projects.filter(p => p.id !== id);
+      this.projects = this.projects.filter((p) => p.id !== id);
       this.saveProjects();
       return true;
     });
 
-    // Handler for selecting a single root folder
     ipcMain.handle('select-root-folder', async () => {
       const { canceled, filePaths } = await dialog.showOpenDialog({
         properties: ['openDirectory'],
-        multiSelections: false
+        multiSelections: false,
       });
-
-      if (canceled || filePaths.length === 0) {
-        return null;
-      }
-
-      return filePaths[0]; // Return just the single folder path
+      return canceled || !filePaths.length ? null : filePaths[0];
     });
   }
 }

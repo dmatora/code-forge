@@ -27,9 +27,9 @@ const ProjectList: React.FC<{
   onOpenApiConfig: () => void;
   onEditProject?: (project: Project) => void;
 }> = ({ onSelectProject, onCreateNew, onOpenApiConfig, onEditProject }) => {
-  const [projects, setProjects] = useState([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
@@ -88,16 +88,16 @@ const ProjectList: React.FC<{
 
   return (
     <Box>
-      <Box mb={6}>
-        <Heading as="h2" size="lg" mb={4}>Your Projects</Heading>
+      <Flex mb={4} justifyContent="space-between" alignItems="center">
+        <Heading as="h1" size="lg">Your Projects</Heading>
         <HStack>
-          <Button onClick={onOpenApiConfig} colorScheme="teal" size="sm">API Settings</Button>
-          <Button onClick={onCreateNew} colorScheme="blue">Create New Project</Button>
+          <Button size="sm" onClick={onOpenApiConfig}>API Settings</Button>
+          <Button size="sm" colorScheme="blue" onClick={onCreateNew}>Create New Project</Button>
         </HStack>
-      </Box>
+      </Flex>
 
       {projects.length === 0 ? (
-        <Box p={4} borderWidth="1px" borderRadius="md">
+        <Box p={4} shadow="md" borderWidth="1px" borderRadius="md">
           No projects yet. Create your first project to get started.
         </Box>
       ) : (
@@ -111,13 +111,13 @@ const ProjectList: React.FC<{
               borderRadius="md"
               _hover={{ bg: 'gray.50' }}
             >
-              <Flex align="center">
+              <Flex alignItems="center">
                 <Box
                   flex="1"
                   cursor="pointer"
                   onClick={() => onSelectProject(project)}
                 >
-                  <Heading as="h3" size="md">{project.name}</Heading>
+                  <Heading size="md">{project.name}</Heading>
                   <Text>Root folder: {project.rootFolder}</Text>
                   <Text fontSize="sm" color="gray.500">
                     Updated: {new Date(project.updatedAt).toLocaleDateString()}
@@ -159,7 +159,7 @@ const ProjectList: React.FC<{
             This action cannot be undone.
           </ModalBody>
           <ModalFooter>
-            <Button mr={3} onClick={onClose}>Cancel</Button>
+            <Button variant="ghost" mr={3} onClick={onClose}>Cancel</Button>
             <Button colorScheme="red" onClick={confirmDelete}>Delete</Button>
           </ModalFooter>
         </ModalContent>
