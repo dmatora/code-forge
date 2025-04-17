@@ -102,17 +102,20 @@ export class ApiService {
     }
   }
 
-  private async fetchAndSaveModels() {
-    if (!this.apiUrl) {
+  private async fetchAndSaveModels(customUrl?: string, customKey?: string) {
+    const url = customUrl || this.apiUrl;
+    const key = customKey || this.apiKey;
+
+    if (!url) {
       console.log('API not configured, using default model');
       this.saveDefaultModels();
-      return;
+      return [];
     }
 
     try {
-      const response = await fetch(`${this.apiUrl}/models`, {
+      const response = await fetch(`${url}/models`, {
         headers: {
-          'Authorization': `Bearer ${this.apiKey || 'dummy-key'}`
+          'Authorization': `Bearer ${key || 'dummy-key'}`
         }
       });
 
@@ -128,15 +131,25 @@ export class ApiService {
           name: model.id
         }));
 
-        this.saveModels(models);
-        console.log(`Saved ${models.length} models to models.json`);
+        // Only save to disk if this is the stored URL (not a temporary one)
+        if (url === this.apiUrl) {
+          this.saveModels(models);
+        }
+
+        return models;
       } else {
         console.log('Invalid response format from API, using default model');
-        this.saveDefaultModels();
+        if (url === this.apiUrl) {
+          this.saveDefaultModels();
+        }
+        return [];
       }
     } catch (error) {
       console.error('Error fetching models from API server:', error);
-      this.saveDefaultModels();
+      if (url === this.apiUrl) {
+        this.saveDefaultModels();
+      }
+      throw error;
     }
   }
 
@@ -144,6 +157,7 @@ export class ApiService {
     const defaultModel = this.defaultModel || 'gpt-3.5-turbo';
     console.log(`Saving default model: ${defaultModel}`);
     this.saveModels([{ id: defaultModel, name: defaultModel }]);
+    return [{ id: defaultModel, name: defaultModel }];
   }
 
   private saveModels(models) {
@@ -171,6 +185,32 @@ export class ApiService {
       } catch (error) {
         console.error('Failed to read models:', error);
         return [];
+      }
+    });
+
+    // Add a new handler to refresh models list
+    ipcMain.handle('refresh-models', async (_, config = {}) => {
+      try {
+        // Use the provided URL and key if available, otherwise use the stored ones
+        const url = config.apiUrl || this.apiUrl;
+        const key = config.apiKey || this.apiKey;
+
+        if (!url) {
+          return { success: false, error: 'No API URL configured' };
+        }
+
+        try {
+          const models = await this.fetchAndSaveModels(url, key);
+          return { success: true, models };
+        } catch (error) {
+          return {
+            success: false,
+            error: error.message || 'Failed to connect to API'
+          };
+        }
+      } catch (error) {
+        console.error('Failed to refresh models:', error);
+        return { success: false, error: error.message };
       }
     });
 

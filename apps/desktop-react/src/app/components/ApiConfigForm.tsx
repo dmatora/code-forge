@@ -10,8 +10,13 @@ import {
   useToast,
   Alert,
   AlertIcon,
-  Text
+  Text,
+  Flex,
+  Spinner,
+  List,
+  ListItem
 } from '@chakra-ui/react';
+import { RepeatIcon } from '@chakra-ui/icons';
 
 const ApiConfigForm: React.FC<{
   onSave: () => void;
@@ -20,6 +25,8 @@ const ApiConfigForm: React.FC<{
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
+  const [models, setModels] = useState([]);
+  const [refreshingModels, setRefreshingModels] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -30,6 +37,10 @@ const ApiConfigForm: React.FC<{
           if (config.url) setApiUrl(config.url);
           if (config.key) setApiKey(config.key);
         }
+
+        // Load models
+        const modelsList = await window.electron.getModels();
+        setModels(modelsList);
       } catch (error) {
         console.error('Failed to load API configuration:', error);
       }
@@ -43,6 +54,12 @@ const ApiConfigForm: React.FC<{
     try {
       const result = await window.electron.updateApiConfig({ apiUrl, apiKey });
       if (result.success) {
+        // Refresh models list after successful save
+        if (apiUrl) {
+          const modelsList = await window.electron.getModels();
+          setModels(modelsList);
+        }
+
         toast({
           title: 'API configuration saved',
           description: 'The API configuration has been updated successfully.',
@@ -74,14 +91,61 @@ const ApiConfigForm: React.FC<{
     }
   };
 
+  const handleRefreshModels = async () => {
+    if (!apiUrl) {
+      toast({
+        title: 'API URL required',
+        description: 'Please enter an API URL first',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setRefreshingModels(true);
+    try {
+      const result = await window.electron.refreshModels({ apiUrl, apiKey });
+      if (result.success) {
+        setModels(result.models);
+        toast({
+          title: 'Models refreshed',
+          description: `Found ${result.models.length} models`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Failed to refresh models',
+          description: result.error || 'An error occurred while fetching models.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh models:', error);
+      toast({
+        title: 'Failed to refresh models',
+        description: 'An error occurred while fetching models from the API.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setRefreshingModels(false);
+    }
+  };
+
   return (
     <Box p={5}>
-      <Heading as="h2" size="lg" mb={6}>
+      <Heading size="lg" mb={6}>
         API Configuration
       </Heading>
 
-      <VStack spacing={6} align="stretch">
-        <FormControl id="api-url">
+      <VStack spacing={4} align="start">
+        <FormControl>
           <FormLabel>API URL</FormLabel>
           <Input
             value={apiUrl}
@@ -90,7 +154,7 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <FormControl id="api-key">
+        <FormControl>
           <FormLabel>API Key</FormLabel>
           <Input
             value={apiKey}
@@ -102,15 +166,54 @@ const ApiConfigForm: React.FC<{
 
         <Alert status="info" borderRadius="md">
           <AlertIcon />
-          <Box>
+          <Text>
             Enter the base URL for your OpenAI-compatible API and your API key. This setting will apply to all projects.
-          </Box>
+          </Text>
         </Alert>
 
-        <Box display="flex" justifyContent="flex-end">
-          <Button variant="outline" onClick={onCancel} mr={3}>
-            Cancel
-          </Button>
+        {/* Models section */}
+        <Box w="full" mt={4}>
+          <Flex justify="space-between" align="center" mb={2}>
+            <Heading size="md">Available Models</Heading>
+            <Button
+              leftIcon={<RepeatIcon />}
+              onClick={handleRefreshModels}
+              isLoading={refreshingModels}
+              loadingText="Refreshing..."
+              size="sm"
+              colorScheme="teal"
+              isDisabled={!apiUrl}
+            >
+              Refresh Models
+            </Button>
+          </Flex>
+
+          {models.length > 0 ? (
+            <Box borderWidth="1px" borderRadius="md" p={2}>
+              <List spacing={1}>
+                {models.map((model, index) => (
+                  <ListItem key={index}>
+                    {model.name || model.id}
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          ) : (
+            <Box p={4} borderWidth="1px" borderRadius="md">
+              {refreshingModels ? (
+                <Flex align="center">
+                  <Spinner size="sm" mr={2}/>
+                  Loading models...
+                </Flex>
+              ) : (
+                <Text>No models available. Configure API URL and click Refresh.</Text>
+              )}
+            </Box>
+          )}
+        </Box>
+
+        <Flex w="full" justify="space-between" mt={4}>
+          <Button onClick={onCancel} variant="outline">Cancel</Button>
           <Button
             colorScheme="blue"
             onClick={handleSave}
@@ -119,7 +222,7 @@ const ApiConfigForm: React.FC<{
           >
             Save
           </Button>
-        </Box>
+        </Flex>
       </VStack>
     </Box>
   );

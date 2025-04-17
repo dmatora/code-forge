@@ -23,6 +23,7 @@ interface ElectronAPI {
     regularModel?: string;
   }) => Promise<any>;
   getModels: () => Promise<any[]>; // Get available models
+  refreshModels: (config?: { apiUrl?: string; apiKey?: string }) => Promise<{ success: boolean, models?: any[], error?: string }>;
 
   // Preferences
   getPreferences: () => Promise<{ reasoningModel?: string; regularModel?: string; apiKey?: string }>;
