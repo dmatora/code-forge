@@ -24,14 +24,14 @@ interface PromptInterfaceProps {
   project: Project;
 }
 
-const PromptInterface: React.FC = ({ project }) => {
+const PromptInterface: React.FC<PromptInterfaceProps> = ({ project }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
-  const [models, setModels] = useState([]);
+  const [models, setModels] = useState<Array<{id: string, name: string}>>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
   const toast = useToast();
@@ -57,17 +57,17 @@ const PromptInterface: React.FC = ({ project }) => {
           const preferences = await window.electron.getPreferences();
 
           // Set model values based on preferences, falling back to config defaults
-          if (preferences.reasoningModel && modelsList.some(m => m.id === preferences.reasoningModel)) {
+          if (preferences.reasoningModel && modelsList.some((m: {id: string}) => m.id === preferences.reasoningModel)) {
             setReasoningModel(preferences.reasoningModel);
-          } else if (config?.model && modelsList.some(m => m.id === config.model)) {
+          } else if (config?.model && modelsList.some((m: {id: string}) => m.id === config.model)) {
             setReasoningModel(config.model);
           } else if (modelsList.length > 0) {
             setReasoningModel(modelsList[0].id);
           }
 
-          if (preferences.regularModel && modelsList.some(m => m.id === preferences.regularModel)) {
+          if (preferences.regularModel && modelsList.some((m: {id: string}) => m.id === preferences.regularModel)) {
             setRegularModel(preferences.regularModel);
-          } else if (config?.model && modelsList.some(m => m.id === config.model)) {
+          } else if (config?.model && modelsList.some((m: {id: string}) => m.id === config.model)) {
             setRegularModel(config.model);
           } else if (modelsList.length > 0) {
             setRegularModel(modelsList[0].id);
@@ -157,7 +157,7 @@ const PromptInterface: React.FC = ({ project }) => {
       });
     } catch (error) {
       console.error('API request failed:', error);
-      setResponse(`Error: ${error.message}`);
+      setResponse(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
