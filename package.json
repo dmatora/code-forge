@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "serve": "nx serve desktop-react & nx serve desktop-electron",
+    "pack": "nx run desktop-react:build && nx package desktop-electron",
     "pick-make": "/bin/bash pick-identity-and-make.sh",
     "pick-pack": "/bin/bash pick-identity-and-pack.sh"
   },
