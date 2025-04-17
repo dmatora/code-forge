@@ -6,11 +6,21 @@ import {
   FormLabel,
   Input,
   VStack,
+  HStack,
   Heading,
   List,
   ListItem,
   Flex,
-  HStack
+  Textarea,
+  useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure
 } from '@chakra-ui/react';
 import { Project } from '../types';
 
@@ -26,7 +36,10 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
   onCancel
 }) => {
   const [name, setName] = useState(project?.name || '');
-  const [folders, setFolders] = useState<string[]>(project?.folders || []);
+  const [folders, setFolders] = useState(project?.folders || []);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [bulkPaths, setBulkPaths] = useState('');
+  const toast = useToast();
 
   const handleSelectFolders = async () => {
     try {
@@ -48,15 +61,82 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
     onSave({ name, folders });
   };
 
+  const handleBulkPathsSubmit = () => {
+    try {
+      // Try to parse as JSON first if it looks like JSON
+      let newPaths = [];
+      const trimmedInput = bulkPaths.trim();
+      
+      if (trimmedInput.startsWith('[') && trimmedInput.endsWith(']')) {
+        try {
+          // Parse as JSON array
+          newPaths = JSON.parse(trimmedInput);
+          if (!Array.isArray(newPaths)) {
+            throw new Error('Parsed result is not an array');
+          }
+        } catch (error) {
+          console.error('JSON parse error:', error);
+          // Fall back to line-by-line parsing
+          newPaths = trimmedInput
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('[') && !line.endsWith(']'));
+        }
+      } else {
+        // Split by newlines
+        newPaths = trimmedInput
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line);
+      }
+      
+      // Filter out any non-string values
+      newPaths = newPaths.filter(path => typeof path === 'string' && path.length > 0);
+      
+      if (newPaths.length === 0) {
+        toast({
+          title: 'No valid paths found',
+          status: 'warning',
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
+      
+      // Add new paths and remove duplicates
+      const uniquePaths = [...new Set([...folders, ...newPaths])];
+      setFolders(uniquePaths);
+      
+      toast({
+        title: 'Paths added',
+        description: `Added ${uniquePaths.length - folders.length} new paths`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      onClose();
+      setBulkPaths('');
+    } catch (error) {
+      toast({
+        title: 'Failed to parse paths',
+        description: error instanceof Error ? error.message : String(error),
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
   return (
-    <Box as="form" onSubmit={handleSubmit} p={5} shadow="md" borderWidth="1px" borderRadius="md">
-      <Heading as="h2" size="lg" mb={6}>
+    <Box>
+      <Heading size="lg" mb={6}>
         {project ? 'Edit Project' : 'Create New Project'}
       </Heading>
 
-      <VStack spacing={4} align="stretch">
+      <VStack as="form" spacing={4} onSubmit={handleSubmit} align="stretch">
         <FormControl isRequired>
-          <FormLabel htmlFor="name">Project Name</FormLabel>
+          <FormLabel>Project Name</FormLabel>
           <Input
             id="name"
             value={name}
@@ -67,20 +147,32 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
 
         <FormControl>
           <FormLabel>Folders</FormLabel>
-          <Button
-            colorScheme="blue"
-            mb={4}
-            onClick={handleSelectFolders}
-          >
-            Add Folders
-          </Button>
+          <HStack spacing={2} mb={3}>
+            <Button
+              colorScheme="blue"
+              onClick={handleSelectFolders}
+            >
+              Add Folders
+            </Button>
+            <Button
+              colorScheme="teal"
+              onClick={onOpen}
+            >
+              Paste Multiple Paths
+            </Button>
+          </HStack>
 
           {folders.length > 0 && (
             <List spacing={2}>
               {folders.map((folder, index) => (
-                <ListItem key={index}>
-                  <Flex justifyContent="space-between" alignItems="center">
-                    <Box as="span" isTruncated>{folder}</Box>
+                <ListItem
+                  key={index}
+                  p={2}
+                  bg="gray.50"
+                  borderRadius="md"
+                >
+                  <Flex justify="space-between" align="center">
+                    {folder}
                     <Button
                       size="sm"
                       onClick={() => handleRemoveFolder(index)}
@@ -94,11 +186,39 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
           )}
         </FormControl>
 
-        <HStack spacing={4} mt={4}>
-          <Button type="submit" colorScheme="blue">Save</Button>
+        <HStack spacing={4} pt={4}>
+          <Button colorScheme="blue" type="submit">Save</Button>
           <Button onClick={onCancel}>Cancel</Button>
         </HStack>
       </VStack>
+      
+      {/* Modal for pasting multiple paths */}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Paste Multiple Paths</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl>
+              <FormLabel>Paste paths (one per line or as JSON array)</FormLabel>
+              <Textarea 
+                value={bulkPaths}
+                onChange={(e) => setBulkPaths(e.target.value)}
+                placeholder="/path/to/folder1
+/path/to/folder2
+/path/to/folder3"
+                rows={10}
+              />
+            </FormControl>
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={handleBulkPathsSubmit}>
+              Add Paths
+            </Button>
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

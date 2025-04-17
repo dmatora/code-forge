@@ -50,9 +50,18 @@ export class FileService {
   private async generateContextFromFolders(folders: string[]): Promise<string> {
     let markdownContent = '';
 
-    for (const folder of folders) {
-      markdownContent += `# Folder: ${folder}\n\n`;
-      markdownContent += await this.processFolderContents(folder, 1);
+    for (const path of folders) {
+      try {
+        const stats = fs.statSync(path);
+        if (stats.isDirectory()) {
+          markdownContent += `# Folder: ${path}\n\n`;
+        } else {
+          markdownContent += `# File: ${path}\n\n`;
+        }
+        markdownContent += await this.processFolderContents(path, 1);
+      } catch (error) {
+        markdownContent += `# Path: ${path} (Error: ${error.message})\n\n`;
+      }
     }
 
     return markdownContent;
@@ -63,28 +72,70 @@ export class FileService {
     depth: number
   ): Promise<string> {
     let content = '';
-    const items = fs.readdirSync(folderPath);
-    const headerLevel = '#'.repeat(depth + 1);
-
-    for (const item of items) {
-      if (this.excludeFiles.includes(item)) continue;
-
-      const itemPath = path.join(folderPath, item);
-      const stats = fs.statSync(itemPath);
-
-      if (stats.isDirectory()) {
-        content += `${headerLevel} ${item}\n\n`;
-        content += await this.processFolderContents(itemPath, depth + 1);
-      } else if (stats.isFile()) {
-        const ext = path.extname(item).toLowerCase();
-        if (this.excludeExtensions.includes(ext)) continue;
-
-        content += `${headerLevel} ${item}\n\n`;
-        content += '```\n';
-        const fileContent = fs.readFileSync(itemPath, 'utf8');
-        content += fileContent;
-        content += '\n```\n\n';
+    
+    try {
+      // Check if path exists
+      if (!fs.existsSync(folderPath)) {
+        return `Error: Path does not exist: ${folderPath}\n\n`;
       }
+
+      const stats = fs.statSync(folderPath);
+      const headerLevel = '#'.repeat(depth + 1);
+
+      // If it's a file, directly process it
+      if (stats.isFile()) {
+        const ext = path.extname(folderPath).toLowerCase();
+        if (this.excludeExtensions.includes(ext)) {
+          return ''; // Skip excluded file types
+        }
+
+        const fileName = path.basename(folderPath);
+        content += `${headerLevel} ${fileName}\n\n`;
+        content += '```\n';
+        try {
+          const fileContent = fs.readFileSync(folderPath, 'utf8');
+          content += fileContent;
+        } catch (readError) {
+          content += `Error reading file: ${readError.message}`;
+        }
+        content += '\n```\n\n';
+        return content;
+      }
+
+      // If it's a directory, continue with existing logic
+      const items = fs.readdirSync(folderPath);
+
+      for (const item of items) {
+        if (this.excludeFiles.includes(item)) continue;
+
+        const itemPath = path.join(folderPath, item);
+        
+        try {
+          const itemStats = fs.statSync(itemPath);
+
+          if (itemStats.isDirectory()) {
+            content += `${headerLevel} ${item}\n\n`;
+            content += await this.processFolderContents(itemPath, depth + 1);
+          } else if (itemStats.isFile()) {
+            const ext = path.extname(item).toLowerCase();
+            if (this.excludeExtensions.includes(ext)) continue;
+
+            content += `${headerLevel} ${item}\n\n`;
+            content += '```\n';
+            try {
+              const fileContent = fs.readFileSync(itemPath, 'utf8');
+              content += fileContent;
+            } catch (readError) {
+              content += `Error reading file: ${readError.message}`;
+            }
+            content += '\n```\n\n';
+          }
+        } catch (statError) {
+          content += `${headerLevel} ${item} (Error: ${statError.message})\n\n`;
+        }
+      }
+    } catch (error) {
+      return `Error processing path ${folderPath}: ${error.message}\n\n`;
     }
 
     return content;
