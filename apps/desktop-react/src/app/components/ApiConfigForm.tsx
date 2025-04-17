@@ -15,7 +15,8 @@ import {
   Spinner,
   List,
   ListItem
-} from '@chakra-ui/react';
+} from '@chakra-ui/react'; // Added Divider
+import { Divider } from '@chakra-ui/react';
 import { RepeatIcon } from '@chakra-ui/icons';
 import { Model } from '../types/model';
 
@@ -25,9 +26,12 @@ const ApiConfigForm: React.FC<{
 }> = ({ onSave, onCancel }) => {
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [telegramApiKey, setTelegramApiKey] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
   const [loading, setLoading] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
   const [refreshingModels, setRefreshingModels] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -39,6 +43,12 @@ const ApiConfigForm: React.FC<{
           if (config.key) setApiKey(config.key);
         }
 
+        // Load Telegram config
+        const telegramConfig = await window.electron.getTelegramConfig();
+        if (telegramConfig) {
+          if (telegramConfig.telegramApiKey) setTelegramApiKey(telegramConfig.telegramApiKey);
+          if (telegramConfig.telegramChatId) setTelegramChatId(telegramConfig.telegramChatId);
+        }
         // Load models
         const modelsList = await window.electron.getModels();
         setModels(modelsList);
@@ -53,8 +63,13 @@ const ApiConfigForm: React.FC<{
   const handleSave = async () => {
     setLoading(true);
     try {
-      const result = await window.electron.updateApiConfig({ apiUrl, apiKey });
-      if (result.success) {
+      // Save API config and Telegram config in parallel
+      const [apiResult, telegramResult] = await Promise.all([
+        window.electron.updateApiConfig({ apiUrl, apiKey }),
+        window.electron.saveTelegramConfig({ telegramApiKey, telegramChatId })
+      ]);
+
+      if (apiResult.success && telegramResult.success) {
         // Refresh models list after successful save
         if (apiUrl) {
           const modelsList = await window.electron.getModels();
@@ -62,8 +77,8 @@ const ApiConfigForm: React.FC<{
         }
 
         toast({
-          title: 'API configuration saved',
-          description: 'The API configuration has been updated successfully.',
+          title: 'Configuration saved',
+          description: 'API and Telegram settings have been updated successfully.',
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -71,18 +86,18 @@ const ApiConfigForm: React.FC<{
         onSave();
       } else {
         toast({
-          title: 'Failed to save API configuration',
-          description: result.error || 'An error occurred while updating the API configuration.',
+          title: 'Failed to save configuration',
+          description: apiResult.error || telegramResult.error || 'An error occurred while updating the configuration.',
           status: 'error',
           duration: 5000,
           isClosable: true,
         });
       }
     } catch (error) {
-      console.error('Failed to update API configuration:', error);
+      console.error('Failed to update configuration:', error);
       toast({
-        title: 'Failed to save API configuration',
-        description: 'An error occurred while updating the API configuration.',
+        title: 'Failed to save configuration',
+        description: 'An error occurred while updating the configuration.',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -139,6 +154,37 @@ const ApiConfigForm: React.FC<{
     }
   };
 
+  const handleTestTelegram = async () => {
+    if (!telegramApiKey || !telegramChatId) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please enter both Telegram API Key and Chat ID.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setTestingTelegram(true);
+    try {
+      const result = await window.electron.testTelegramConfig({ telegramApiKey, telegramChatId });
+      toast({
+        title: result.success ? 'Telegram Test Successful' : 'Telegram Test Failed',
+        description: result.success ? 'A test message was sent successfully.' : result.error || 'An unknown error occurred.',
+        status: result.success ? 'success' : 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Failed to test Telegram configuration:', error);
+      toast({ title: 'Telegram Test Error', description: 'An unexpected error occurred.', status: 'error', duration: 5000, isClosable: true });
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
+
   return (
     <Box maxW="800px" mx="auto" p={4}>
       <Heading as="h1" mb={6}>
@@ -171,6 +217,38 @@ const ApiConfigForm: React.FC<{
             Enter the base URL for your OpenAI-compatible API and your API key. This setting will apply to all projects.
           </Text>
         </Alert>
+
+        <Divider my={6} />
+
+        {/* Telegram Configuration */}
+        <Heading as="h2" size="lg" mb={4}>
+          Telegram Notifications
+        </Heading>
+
+        <FormControl id="telegram-api-key">
+          <FormLabel>Telegram Bot API Key</FormLabel>
+          <Input
+            value={telegramApiKey}
+            onChange={e => setTelegramApiKey(e.target.value)}
+            placeholder="Enter your Telegram Bot API Key"
+          />
+        </FormControl>
+
+        <FormControl id="telegram-chat-id">
+          <FormLabel>Telegram Chat ID</FormLabel>
+          <Input
+            value={telegramChatId}
+            onChange={e => setTelegramChatId(e.target.value)}
+            placeholder="Enter the target Chat ID"
+          />
+        </FormControl>
+
+        <Button
+          onClick={handleTestTelegram}
+          isLoading={testingTelegram}
+          loadingText="Testing..."
+          isDisabled={!telegramApiKey || !telegramChatId}
+        >Test Telegram</Button>
 
         {/* Models section */}
         <Box mt={4}>

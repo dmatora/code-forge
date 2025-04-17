@@ -8,6 +8,8 @@ export interface ModelPreferences {
   regularModel?: string;
   apiUrl?: string;
   apiKey?: string;
+  telegramApiKey?: string;
+  telegramChatId?: string;
 }
 
 export class PreferencesService {
@@ -59,6 +61,45 @@ export class PreferencesService {
       };
       this.savePreferences();
       return this.preferences;
+    });
+
+    // Get Telegram config
+    ipcMain.handle('get-telegram-config', () => {
+      return {
+        telegramApiKey: this.preferences.telegramApiKey,
+        telegramChatId: this.preferences.telegramChatId,
+      };
+    });
+
+    // Save Telegram config
+    ipcMain.handle('save-telegram-config', (_, config: { telegramApiKey: string; telegramChatId: string }) => {
+      this.preferences.telegramApiKey = config.telegramApiKey;
+      this.preferences.telegramChatId = config.telegramChatId;
+      this.savePreferences();
+      return { success: true };
+    });
+
+    // Test Telegram config
+    ipcMain.handle('test-telegram-config', async (_, config: { telegramApiKey: string; telegramChatId: string }) => {
+      const { telegramApiKey, telegramChatId } = config;
+      if (!telegramApiKey || !telegramChatId) {
+        return { success: false, error: 'API Key and Chat ID are required.' };
+      }
+
+      const url = `https://api.telegram.org/bot${telegramApiKey}/sendMessage`;
+      const testMessage = 'Test message from Code Forge! Configuration is working.';
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: telegramChatId, text: testMessage }),
+        });
+        const responseBody = await response.json(); // Read body to prevent memory leaks
+        return { success: response.ok, error: response.ok ? null : `Telegram API Error: ${response.statusText} - ${JSON.stringify(responseBody)}` };
+      } catch (error) {
+        return { success: false, error: `Network or fetch error: ${error.message}` };
+      }
     });
   }
 }

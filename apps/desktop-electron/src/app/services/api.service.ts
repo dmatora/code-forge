@@ -19,6 +19,21 @@ function extractCodeBlock(text) {
   return match ? match[1] : text;
 }
 
+// Helper function to format processing time intelligently
+function formatProcessingTime(milliseconds) {
+  const totalSeconds = milliseconds / 1000;
+
+  if (totalSeconds < 60) {
+    // Less than a minute, show seconds with 2 decimal places
+    return `${totalSeconds.toFixed(2)}s`;
+  } else {
+    // More than a minute, show minutes and seconds
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = (totalSeconds % 60).toFixed();
+    return `${minutes}m ${seconds}s`;
+  }
+}
+
 export class ApiService {
   private apiUrl: string;
   private apiKey: string;
@@ -164,6 +179,42 @@ export class ApiService {
     }
   }
 
+  private async sendTelegramNotification(message: string) {
+    try {
+      // Read the preferences file directly instead of using IPC
+      const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
+
+      if (fs.existsSync(preferencesFilePath)) {
+        const data = fs.readFileSync(preferencesFilePath, 'utf8');
+        const preferences = JSON.parse(data);
+
+        const telegramApiKey = preferences.telegramApiKey;
+        const telegramChatId = preferences.telegramChatId;
+
+        if (telegramApiKey && telegramChatId) {
+          const url = `https://api.telegram.org/bot${telegramApiKey}/sendMessage`;
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: telegramChatId,
+              text: message,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error(`Telegram notification failed: ${response.statusText}`, await response.json());
+          } else {
+            console.log('Telegram notification sent successfully.');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send Telegram notification:', error);
+    }
+  }
+
   private setupIpcHandlers() {
     // Add a handler to get available models
     ipcMain.handle('get-models', () => {
@@ -274,6 +325,9 @@ export class ApiService {
       console.log(`Using regular model: ${secondModel}`);
 
       try {
+        // Start timing
+        const startTime = performance.now();
+
         // First request with reasoning model
         const firstResult = await generateText({
           model: this.openaiClient(firstModel),
@@ -282,10 +336,15 @@ export class ApiService {
           ]
         });
 
+        // Measure first prompt time
+        const firstPromptTime = performance.now() - startTime;
+
         // Second request with regular model
         console.log('Sending second request...');
         const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
         const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
+
+        const secondStartTime = performance.now();
         const secondResult = await generateText({
           model: this.openaiClient(secondModel),
           messages: [
@@ -293,11 +352,41 @@ export class ApiService {
           ]
         });
 
-        // Get the project root folder from the project service
-        const projects = await ipcMain.handle('get-projects', undefined);
+        // Measure second prompt time
+        const secondPromptTime = performance.now() - secondStartTime;
+
+        // Calculate total time
+        const totalTime = performance.now() - startTime;
+
+        // Format times to be more readable
+        const firstPromptFormatted = formatProcessingTime(firstPromptTime);
+        const secondPromptFormatted = formatProcessingTime(secondPromptTime);
+        const totalFormatted = formatProcessingTime(totalTime);
+
+        // Get the project and scope data directly from files
+        const userDataPath = app.getPath('userData');
+        const projectsPath = path.join(userDataPath, 'projects.json');
+        const scopesPath = path.join(userDataPath, 'scopes.json');
+
+        // Read projects file
+        let projects = [];
+        if (fs.existsSync(projectsPath)) {
+          const projectsData = fs.readFileSync(projectsPath, 'utf8');
+          projects = JSON.parse(projectsData);
+        }
         const project = projects.find(p => p.id === projectId);
 
-        if (project && project.rootFolder) {
+        // Read scopes file
+        let scopes = [];
+        if (fs.existsSync(scopesPath)) {
+          const scopesData = fs.readFileSync(scopesPath, 'utf8');
+          scopes = JSON.parse(scopesData);
+          // Filter to only get scopes for this project
+          scopes = scopes.filter(s => s.projectId === projectId);
+        }
+        const scope = scopes.find(s => s.id === scopeId);
+
+        if (project && project.rootFolder && scope) {
           const outputPath = path.join(project.rootFolder, 'update.sh');
 
           // Apply function to extract code block
@@ -305,8 +394,12 @@ export class ApiService {
 
           fs.writeFileSync(outputPath, processedText);
           console.log(`Saved processed response to ${outputPath}`);
+
+          // Send Telegram notification with timing information
+          const notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
+          await this.sendTelegramNotification(notificationMessage);
         } else {
-          console.error('Project root folder not found, cannot save update.sh');
+          console.error('Project root folder or scope not found, cannot save update.sh');
         }
 
         // Return the first response to the user

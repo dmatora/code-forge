@@ -33,4 +33,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Preferences
   getPreferences: () => ipcRenderer.invoke('get-preferences'),
   saveModelPreferences: (preferences) => ipcRenderer.invoke('save-model-preferences', preferences),
+
+  // Telegram Notifications
+  getTelegramConfig: () => ipcRenderer.invoke('get-telegram-config'),
+  saveTelegramConfig: (config) => ipcRenderer.invoke('save-telegram-config', config),
+  testTelegramConfig: (config) => ipcRenderer.invoke('test-telegram-config', config),
 });

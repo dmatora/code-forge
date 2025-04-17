@@ -36,6 +36,11 @@ interface ElectronAPI {
   // Preferences
   getPreferences: () => Promise<{ reasoningModel?: string; regularModel?: string; apiKey?: string }>;
   saveModelPreferences: (preferences: { reasoningModel?: string; regularModel?: string; apiKey?: string }) => Promise<any>;
+
+  // Telegram Notifications
+  getTelegramConfig: () => Promise<{ telegramApiKey?: string; telegramChatId?: string }>;
+  saveTelegramConfig: (config: { telegramApiKey: string; telegramChatId: string }) => Promise<{ success: boolean; error?: string }>;
+  testTelegramConfig: (config: { telegramApiKey: string; telegramChatId: string }) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface Window {
