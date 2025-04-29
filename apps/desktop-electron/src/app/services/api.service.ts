@@ -48,7 +48,8 @@ export class ApiService {
     const settings = settingsService.getSettings();
     this.apiUrl = settings.apiUrl || process.env.OPENAI_URL || '';
     this.apiKey = settings.apiKey || process.env.OPENAI_API_KEY || '';
-    this.defaultModel = settings.reasoningModel || process.env.OPENAI_MODEL || '';
+    this.defaultModel =
+      settings.reasoningModel || process.env.OPENAI_MODEL || '';
 
     // Set path to models.json in the user data directory
     this.modelsFilePath = path.join(app.getPath('userData'), 'models.json');
@@ -82,7 +83,7 @@ export class ApiService {
   private initializeClient() {
     this.openaiClient = createOpenAI({
       baseURL: this.apiUrl,
-      apiKey: this.apiKey || 'dummy-key'
+      apiKey: this.apiKey || 'dummy-key',
     });
     console.log(`OpenAI client initialized with API URL: ${this.apiUrl}`);
   }
@@ -122,8 +123,8 @@ export class ApiService {
     try {
       const response = await fetch(`${url}/models`, {
         headers: {
-          'Authorization': `Bearer ${key || 'dummy-key'}`
-        }
+          Authorization: `Bearer ${key || 'dummy-key'}`,
+        },
       });
 
       if (!response.ok) {
@@ -133,9 +134,9 @@ export class ApiService {
       const data = await response.json();
 
       if (data && data.data && Array.isArray(data.data)) {
-        const models = data.data.map(model => ({
+        const models = data.data.map((model) => ({
           id: model.id,
-          name: model.id
+          name: model.id,
         }));
 
         // Only save to disk if this is the stored URL (not a temporary one)
@@ -194,7 +195,10 @@ export class ApiService {
         });
 
         if (!response.ok) {
-          console.error(`Telegram notification failed: ${response.statusText}`, await response.json());
+          console.error(
+            `Telegram notification failed: ${response.statusText}`,
+            await response.json()
+          );
         } else {
           console.log('Telegram notification sent successfully.');
         }
@@ -241,7 +245,7 @@ export class ApiService {
         } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to connect to API'
+            error: error.message || 'Failed to connect to API',
           };
         }
       } catch (error) {
@@ -250,135 +254,148 @@ export class ApiService {
       }
     });
 
-    ipcMain.handle('send-prompt', async (_, { prompt, context, projectId, scopeId, reasoningModel, regularModel, useTwoStep = true }) => {
-      if (!this.apiUrl || !this.openaiClient) {
-        throw new Error('API not configured. Please set OPENAI_URL environment variable.');
-      }
-
-      // Use provided models or fall back to default
-      const firstModel = reasoningModel || this.defaultModel;
-      const secondModel = regularModel || this.defaultModel;
-
-      console.log(`Using ${useTwoStep ? 'two-step' : 'one-step'} process`);
-      console.log(`Using reasoning model: ${firstModel}`);
-      if (useTwoStep) {
-        console.log(`Using regular model: ${secondModel}`);
-      }
-
-      try {
-        // Get the project and scope data first to make sure we have it for notifications
-        const userDataPath = app.getPath('userData');
-        const projectsPath = path.join(userDataPath, 'projects.json');
-        const scopesPath = path.join(userDataPath, 'scopes.json');
-
-        // Read projects file
-        let projects = [];
-        if (fs.existsSync(projectsPath)) {
-          const projectsData = fs.readFileSync(projectsPath, 'utf8');
-          projects = JSON.parse(projectsData);
+    ipcMain.handle(
+      'send-prompt',
+      async (
+        _,
+        {
+          prompt,
+          context,
+          projectId,
+          scopeId,
+          reasoningModel,
+          regularModel,
+          useTwoStep = true,
         }
-        const project = projects.find(p => p.id === projectId);
-
-        // Read scopes file
-        let scopes = [];
-        if (fs.existsSync(scopesPath)) {
-          const scopesData = fs.readFileSync(scopesPath, 'utf8');
-          scopes = JSON.parse(scopesData);
-          // Filter to only get scopes for this project
-          scopes = scopes.filter(s => s.projectId === projectId);
-        }
-        const scope = scopes.find(s => s.id === scopeId);
-
-        if (!project || !project.rootFolder || !scope) {
-          throw new Error('Project root folder or scope not found, cannot save update.sh');
+      ) => {
+        if (!this.apiUrl || !this.openaiClient) {
+          throw new Error(
+            'API not configured. Please set OPENAI_URL environment variable.'
+          );
         }
 
-        // Start timing
-        const startTime = performance.now();
-        let responseText;
-        let processedText;
-        let notificationMessage;
+        // Use provided models or fall back to default
+        const firstModel = reasoningModel || this.defaultModel;
+        const secondModel = regularModel || this.defaultModel;
 
+        console.log(`Using ${useTwoStep ? 'two-step' : 'one-step'} process`);
+        console.log(`Using reasoning model: ${firstModel}`);
         if (useTwoStep) {
-          // First request with reasoning model
-          const firstResult = await generateText({
-            model: this.openaiClient(firstModel),
-            messages: [
-              { role: 'user', content: `${prompt}\n\n${context}` }
-            ]
-          });
-
-          // Measure first prompt time
-          const firstPromptTime = performance.now() - startTime;
-
-          // Second request with regular model
-          console.log('Sending second request...');
-          const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
-          const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
-
-          const secondStartTime = performance.now();
-          const secondResult = await generateText({
-            model: this.openaiClient(secondModel),
-            messages: [
-              { role: 'user', content: secondPrompt }
-            ]
-          });
-
-          // Measure second prompt time
-          const secondPromptTime = performance.now() - secondStartTime;
-
-          // Calculate total time
-          const totalTime = performance.now() - startTime;
-
-          // Format times to be more readable
-          const firstPromptFormatted = formatProcessingTime(firstPromptTime);
-          const secondPromptFormatted = formatProcessingTime(secondPromptTime);
-          const totalFormatted = formatProcessingTime(totalTime);
-
-          // Use first result as response, second result for update script
-          responseText = firstResult.text;
-          processedText = extractCodeBlock(secondResult.text);
-
-          // Create notification message for two-step process
-          notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
-        } else {
-          // One-step process: direct shell script generation
-          const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
-
-          const oneStepResult = await generateText({
-            model: this.openaiClient(firstModel),
-            messages: [
-              { role: 'user', content: oneStepPrompt }
-            ]
-          });
-
-          // Process the single response
-          responseText = oneStepResult.text;
-          processedText = extractCodeBlock(oneStepResult.text);
-
-          // Calculate total time for one-step process
-          const totalTime = performance.now() - startTime;
-          const totalFormatted = formatProcessingTime(totalTime);
-
-          // Create notification message for one-step process
-          notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ One-step processing time: ${totalFormatted}`;
+          console.log(`Using regular model: ${secondModel}`);
         }
 
-        // Save the output file
-        const outputPath = path.join(project.rootFolder, 'update.sh');
-        fs.writeFileSync(outputPath, processedText);
-        console.log(`Saved processed response to ${outputPath}`);
+        try {
+          // Get the project and scope data first to make sure we have it for notifications
+          const userDataPath = app.getPath('userData');
+          const projectsPath = path.join(userDataPath, 'projects.json');
+          const scopesPath = path.join(userDataPath, 'scopes.json');
 
-        // Send the notification
-        await this.sendTelegramNotification(notificationMessage);
+          // Read projects file
+          let projects = [];
+          if (fs.existsSync(projectsPath)) {
+            const projectsData = fs.readFileSync(projectsPath, 'utf8');
+            projects = JSON.parse(projectsData);
+          }
+          const project = projects.find((p) => p.id === projectId);
 
-        // Return the response to the user
-        return { response: responseText };
-      } catch (error) {
-        console.error('API request failed:', error);
-        throw error;
+          // Read scopes file
+          let scopes = [];
+          if (fs.existsSync(scopesPath)) {
+            const scopesData = fs.readFileSync(scopesPath, 'utf8');
+            scopes = JSON.parse(scopesData);
+            // Filter to only get scopes for this project
+            scopes = scopes.filter((s) => s.projectId === projectId);
+          }
+          const scope = scopes.find((s) => s.id === scopeId);
+
+          if (!project || !project.rootFolder || !scope) {
+            throw new Error(
+              'Project root folder or scope not found, cannot save update.sh'
+            );
+          }
+
+          // Start timing
+          const startTime = performance.now();
+          let responseText;
+          let processedText;
+          let notificationMessage;
+
+          if (useTwoStep) {
+            // First request with reasoning model
+            const firstResult = await generateText({
+              model: this.openaiClient(firstModel),
+              messages: [{ role: 'user', content: `${prompt}\n\n${context}` }],
+            });
+
+            // Measure first prompt time
+            const firstPromptTime = performance.now() - startTime;
+
+            // Second request with regular model
+            console.log('Sending second request...');
+            const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
+            const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
+
+            const secondStartTime = performance.now();
+            const secondResult = await generateText({
+              model: this.openaiClient(secondModel),
+              messages: [{ role: 'user', content: secondPrompt }],
+            });
+
+            // Measure second prompt time
+            const secondPromptTime = performance.now() - secondStartTime;
+
+            // Calculate total time
+            const totalTime = performance.now() - startTime;
+
+            // Format times to be more readable
+            const firstPromptFormatted = formatProcessingTime(firstPromptTime);
+            const secondPromptFormatted =
+              formatProcessingTime(secondPromptTime);
+            const totalFormatted = formatProcessingTime(totalTime);
+
+            // Use first result as response, second result for update script
+            responseText = firstResult.text;
+            processedText = extractCodeBlock(secondResult.text);
+
+            // Create notification message for two-step process
+            notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
+          } else {
+            // One-step process: direct shell script generation
+            const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
+
+            const oneStepResult = await generateText({
+              model: this.openaiClient(firstModel),
+              messages: [{ role: 'user', content: oneStepPrompt }],
+            });
+
+            // Process the single response
+            responseText = oneStepResult.text;
+            processedText = extractCodeBlock(oneStepResult.text);
+
+            // Calculate total time for one-step process
+            const totalTime = performance.now() - startTime;
+            const totalFormatted = formatProcessingTime(totalTime);
+
+            // Create notification message for one-step process
+            notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ One-step processing time: ${totalFormatted}`;
+          }
+
+          // Save the output file
+          const outputPath = path.join(project.rootFolder, 'update.sh');
+          fs.writeFileSync(outputPath, processedText);
+          console.log(`Saved processed response to ${outputPath}`);
+
+          // Send the notification
+          await this.sendTelegramNotification(notificationMessage);
+
+          // Return the response to the user
+          return { response: responseText };
+        } catch (error) {
+          console.error('API request failed:', error);
+          throw error;
+        }
       }
-    });
+    );
   }
 }
 
