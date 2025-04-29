@@ -47,6 +47,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
   const [useTwoStep, setUseTwoStep] = useState(true); // Default to two-step process
+  const [initialPreferenceLoaded, setInitialPreferenceLoaded] = useState(false);
   const toast = useToast();
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
@@ -85,6 +86,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           } else if (modelsList.length > 0) {
             setRegularModel(modelsList[0].id);
           }
+
+          // Mark that we've loaded the initial preferences
+          setInitialPreferenceLoaded(true);
         }
       } catch (error) {
         console.error("Failed to load initial data:", error);
@@ -94,15 +98,25 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     loadInitialData();
   }, []);
 
-  // Save preferences when models change
+  // Save preferences when models change, but only after initial load and when actually changed
   useEffect(() => {
+    // Skip if this is the initial load of preferences
+    if (!initialPreferenceLoaded) return;
+
     const savePreferences = async () => {
       if (reasoningModel && regularModel) {
         try {
-          await window.electron.saveModelPreferences({
-            reasoningModel,
-            regularModel
-          });
+          // Get current preferences first
+          const currentPreferences = await window.electron.getPreferences();
+
+          // Only save if something changed
+          if (currentPreferences.reasoningModel !== reasoningModel ||
+              currentPreferences.regularModel !== regularModel) {
+            await window.electron.saveModelPreferences({
+              reasoningModel,
+              regularModel
+            });
+          }
         } catch (error) {
           console.error("Failed to save model preferences:", error);
         }
@@ -112,7 +126,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     if (reasoningModel && regularModel) {
       savePreferences();
     }
-  }, [reasoningModel, regularModel]);
+  }, [reasoningModel, regularModel, initialPreferenceLoaded]);
 
   // Extract the context generation logic into a separate function
   const regenerateContext = async () => {
