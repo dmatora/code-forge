@@ -37,11 +37,36 @@ class ScopeService {
     }
   }
 
-  private saveScopes() {
+  saveScopes() {
     try {
       fs.writeFileSync(this.storagePath, JSON.stringify(this.scopes, null, 2));
     } catch (error) {
       console.error('Failed to save scopes:', error);
+    }
+  }
+
+  createOrUpdateDefaultScope(projectId: string, rootFolder: string): Scope {
+    const existing = this.scopes.find(
+      (s) => s.projectId === projectId && s.name === 'Entire Project'
+    );
+
+    if (existing) {
+      existing.folders = [rootFolder];
+      existing.updatedAt = new Date();
+      this.saveScopes();
+      return existing;
+    } else {
+      const newScope: Scope = {
+        id: uuidv4(),
+        name: 'Entire Project',
+        folders: [rootFolder],
+        projectId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.scopes.push(newScope);
+      this.saveScopes();
+      return newScope;
     }
   }
 

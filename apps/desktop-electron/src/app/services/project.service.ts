@@ -1,8 +1,8 @@
 import { ipcMain, dialog } from 'electron';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { Project } from './types'; // adjust if you keep a shared types file
-import ScopeService, { Scope } from './scope.service';
+import { Project } from './types';
+import ScopeService from './scope.service';
 
 class ProjectService {
   private storagePath: string;
@@ -17,7 +17,6 @@ class ProjectService {
     this.setupIpcHandlers();
   }
 
-  /* ---------- internal helpers ---------- */
   private loadProjects() {
     try {
       if (fs.existsSync(this.storagePath)) {
@@ -42,29 +41,9 @@ class ProjectService {
   }
 
   private createOrUpdateDefaultScope(projectId: string, rootFolder: string) {
-    const scopes = (this.scopeService as any).scopes as Scope[]; // quick internal access
-    const existing = scopes.find(
-      (s) => s.projectId === projectId && s.name === 'Entire Project'
-    );
-
-    if (existing) {
-      existing.folders = [rootFolder];
-      existing.updatedAt = new Date();
-    } else {
-      scopes.push({
-        id: uuidv4(),
-        name: 'Entire Project',
-        folders: [rootFolder],
-        projectId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-
-    (this.scopeService as any).saveScopes();
+    this.scopeService.createOrUpdateDefaultScope(projectId, rootFolder);
   }
 
-  /* ---------- IPC handlers ---------- */
   private setupIpcHandlers() {
     ipcMain.handle('get-projects', () => this.projects);
 
