@@ -4,6 +4,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { generateText } from 'ai';
 import * as fs from 'fs';
 import * as path from 'path';
+import { SettingsService } from './settings.service';
 
 /**
  * Extracts content between ```\n or ```bash\n and ```
@@ -40,53 +41,42 @@ export class ApiService {
   private defaultModel: string;
   private openaiClient;
   private modelsFilePath: string; // Path to models.json file
+  private unsubscribe: () => void;
 
-  constructor() {
-    // Load from preferences first, then fall back to environment variables
-    this.loadApiConfigFromPreferences();
+  constructor(private settingsService: SettingsService) {
+    // Initialize from settings
+    const settings = settingsService.getSettings();
+    this.apiUrl = settings.apiUrl || process.env.OPENAI_URL || '';
+    this.apiKey = settings.apiKey || process.env.OPENAI_API_KEY || '';
+    this.defaultModel = settings.reasoningModel || process.env.OPENAI_MODEL || '';
 
     // Set path to models.json in the user data directory
     this.modelsFilePath = path.join(app.getPath('userData'), 'models.json');
 
-    // Setup IPC handlers first, so they're available even before API is configured
-    this.setupIpcHandlers();
-  }
+    // Subscribe to settings changes
+    this.unsubscribe = settingsService.subscribe(() => {
+      const settings = settingsService.getSettings();
+      // Update local properties when settings change
+      this.apiUrl = settings.apiUrl || '';
+      this.apiKey = settings.apiKey || '';
+      this.defaultModel = settings.reasoningModel || '';
 
-  private async loadApiConfigFromPreferences() {
-    try {
-      const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
-
-      if (fs.existsSync(preferencesFilePath)) {
-        const data = fs.readFileSync(preferencesFilePath, 'utf8');
-        const preferences = JSON.parse(data);
-
-        // Use API URL and key from preferences, fall back to environment variables
-        this.apiUrl = preferences.apiUrl || process.env.OPENAI_URL || '';
-        this.apiKey = preferences.apiKey || process.env.OPENAI_API_KEY || '';
-        this.defaultModel = preferences.reasoningModel || process.env.OPENAI_MODEL || '';
+      // Reinitialize client if needed
+      if (this.apiUrl) {
+        this.initializeClient();
       } else {
-        // Fall back to environment variables
-        this.apiUrl = process.env.OPENAI_URL || '';
-        this.apiKey = process.env.OPENAI_API_KEY || '';
-        this.defaultModel = process.env.OPENAI_MODEL || '';
+        this.openaiClient = null;
       }
+    });
 
-      // Initialize client if API URL is available
-      if (this.apiUrl) {
-        this.initializeModels();
-        this.initializeClient();
-      }
-    } catch (error) {
-      console.error('Failed to load API config from preferences:', error);
-      this.apiUrl = process.env.OPENAI_URL || '';
-      this.apiKey = process.env.OPENAI_API_KEY || '';
-      this.defaultModel = process.env.OPENAI_MODEL || '';
-
-      if (this.apiUrl) {
-        this.initializeModels();
-        this.initializeClient();
-      }
+    // Initialize models and client if API URL is available
+    if (this.apiUrl) {
+      this.initializeModels();
+      this.initializeClient();
     }
+
+    // Setup IPC handlers for models and prompt sending
+    this.setupIpcHandlers();
   }
 
   private initializeClient() {
@@ -187,33 +177,26 @@ export class ApiService {
 
   private async sendTelegramNotification(message: string) {
     try {
-      // Read the preferences file directly instead of using IPC
-      const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
+      // Use settings service instead of reading file directly
+      const settings = this.settingsService.getSettings();
+      const telegramApiKey = settings.telegramApiKey;
+      const telegramChatId = settings.telegramChatId;
 
-      if (fs.existsSync(preferencesFilePath)) {
-        const data = fs.readFileSync(preferencesFilePath, 'utf8');
-        const preferences = JSON.parse(data);
+      if (telegramApiKey && telegramChatId) {
+        const url = `https://api.telegram.org/bot${telegramApiKey}/sendMessage`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: message,
+          }),
+        });
 
-        const telegramApiKey = preferences.telegramApiKey;
-        const telegramChatId = preferences.telegramChatId;
-
-        if (telegramApiKey && telegramChatId) {
-          const url = `https://api.telegram.org/bot${telegramApiKey}/sendMessage`;
-
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: telegramChatId,
-              text: message,
-            }),
-          });
-
-          if (!response.ok) {
-            console.error(`Telegram notification failed: ${response.statusText}`, await response.json());
-          } else {
-            console.log('Telegram notification sent successfully.');
-          }
+        if (!response.ok) {
+          console.error(`Telegram notification failed: ${response.statusText}`, await response.json());
+        } else {
+          console.log('Telegram notification sent successfully.');
         }
       }
     } catch (error) {
@@ -263,57 +246,6 @@ export class ApiService {
         }
       } catch (error) {
         console.error('Failed to refresh models:', error);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle('get-api-config', () => {
-      return {
-        url: this.apiUrl,
-        key: this.apiKey,
-        maxRetries: 0,
-        model: this.defaultModel
-      };
-    });
-
-    ipcMain.handle('update-api-config', async (_, config: { apiUrl: string, apiKey: string }) => {
-      try {
-        // Update the API URL and key
-        this.apiUrl = config.apiUrl;
-        this.apiKey = config.apiKey || '';
-
-        // Save to preferences
-        const preferencesFilePath = path.join(app.getPath('userData'), 'preferences.json');
-        let preferences = {};
-
-        if (fs.existsSync(preferencesFilePath)) {
-          const data = fs.readFileSync(preferencesFilePath, 'utf8');
-          preferences = JSON.parse(data);
-        }
-
-        preferences = {
-          ...preferences,
-          apiUrl: config.apiUrl,
-          apiKey: config.apiKey
-        };
-
-        fs.writeFileSync(preferencesFilePath, JSON.stringify(preferences, null, 2));
-
-        // Re-initialize client and models if URL provided
-        if (this.apiUrl) {
-          this.initializeClient();
-          await this.fetchAndSaveModels();
-          return { success: true, url: this.apiUrl };
-        } else {
-          // If API URL is cleared, remove models.json
-          if (fs.existsSync(this.modelsFilePath)) {
-            fs.unlinkSync(this.modelsFilePath);
-          }
-          this.openaiClient = null;
-          return { success: true, url: '' };
-        }
-      } catch (error) {
-        console.error('Failed to update API config:', error);
         return { success: false, error: error.message };
       }
     });

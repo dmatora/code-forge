@@ -15,7 +15,7 @@ import {
   Spinner,
   List,
   ListItem
-} from '@chakra-ui/react'; // Added Divider
+} from '@chakra-ui/react';
 import { Divider } from '@chakra-ui/react';
 import { RepeatIcon } from '@chakra-ui/icons';
 import { Model } from '../types/model';
@@ -35,64 +35,56 @@ const ApiConfigForm: React.FC<{
   const toast = useToast();
 
   useEffect(() => {
-    const loadApiConfig = async () => {
+    const loadConfig = async () => {
       try {
-        const config = await window.electron.getApiConfig();
-        if (config) {
-          if (config.url) setApiUrl(config.url);
-          if (config.key) setApiKey(config.key);
+        const settings = await window.electron.getSettings();
+        if (settings) {
+          if (settings.apiUrl) setApiUrl(settings.apiUrl);
+          if (settings.apiKey) setApiKey(settings.apiKey);
+          if (settings.telegramApiKey) setTelegramApiKey(settings.telegramApiKey);
+          if (settings.telegramChatId) setTelegramChatId(settings.telegramChatId);
         }
 
-        // Load Telegram config
-        const telegramConfig = await window.electron.getTelegramConfig();
-        if (telegramConfig) {
-          if (telegramConfig.telegramApiKey) setTelegramApiKey(telegramConfig.telegramApiKey);
-          if (telegramConfig.telegramChatId) setTelegramChatId(telegramConfig.telegramChatId);
-        }
-        // Load models
         const modelsList = await window.electron.getModels();
-        setModels(modelsList);
+        setModels(modelsList as Model[]);
       } catch (error) {
-        console.error('Failed to load API configuration:', error);
-      }
-    };
-
-    loadApiConfig();
-  }, []);
-
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      // Save API config and Telegram config in parallel
-      const [apiResult, telegramResult] = await Promise.all([
-        window.electron.updateApiConfig({ apiUrl, apiKey }),
-        window.electron.saveTelegramConfig({ telegramApiKey, telegramChatId })
-      ]);
-
-      if (apiResult.success && telegramResult.success) {
-        // Refresh models list after successful save
-        if (apiUrl) {
-          const modelsList = await window.electron.getModels();
-          setModels(modelsList);
-        }
-
+        console.error('Failed to load configuration:', error);
         toast({
-          title: 'Configuration saved',
-          description: 'API and Telegram settings have been updated successfully.',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-        onSave();
-      } else {
-        toast({
-          title: 'Failed to save configuration',
-          description: apiResult.error || telegramResult.error || 'An error occurred while updating the configuration.',
+          title: 'Error',
+          description: 'Failed to load configuration. Please try again.',
           status: 'error',
           duration: 5000,
           isClosable: true,
         });
       }
+    };
+
+    loadConfig();
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await window.electron.updateSettings({
+        apiUrl,
+        apiKey,
+        telegramApiKey,
+        telegramChatId
+      });
+
+      if (apiUrl) {
+        const modelsList = await window.electron.getModels();
+        setModels(modelsList as Model[]);
+      }
+
+      toast({
+        title: 'Configuration saved',
+        description: 'All settings have been updated successfully.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      onSave();
     } catch (error) {
       console.error('Failed to update configuration:', error);
       toast({
@@ -123,7 +115,7 @@ const ApiConfigForm: React.FC<{
     try {
       const result = await window.electron.refreshModels({ apiUrl, apiKey });
       if (result.success) {
-        setModels(result.models || []);
+        setModels(result.models as Model[] || []);
         toast({
           title: 'Models refreshed',
           description: `Found ${result.models?.length || 0} models`,
@@ -184,15 +176,14 @@ const ApiConfigForm: React.FC<{
     }
   };
 
-
   return (
-    <Box maxW="800px" mx="auto" p={4}>
-      <Heading as="h1" mb={6}>
+    <Box p={5} shadow="md" borderWidth="1px" borderRadius="lg">
+      <Heading size="lg" mb={6}>
         API Configuration
       </Heading>
 
-      <VStack spacing={6} align="stretch">
-        <FormControl id="api-url">
+      <VStack spacing={4} align="stretch">
+        <FormControl id="apiUrl">
           <FormLabel>API URL</FormLabel>
           <Input
             value={apiUrl}
@@ -201,7 +192,7 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <FormControl id="api-key">
+        <FormControl id="apiKey">
           <FormLabel>API Key</FormLabel>
           <Input
             value={apiKey}
@@ -211,21 +202,20 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <Alert status="info">
+        <Alert status="info" borderRadius="md">
           <AlertIcon />
           <Text fontSize="sm">
             Enter the base URL for your OpenAI-compatible API and your API key. This setting will apply to all projects.
           </Text>
         </Alert>
 
-        <Divider my={6} />
+        <Divider />
 
-        {/* Telegram Configuration */}
-        <Heading as="h2" size="lg" mb={4}>
+        <Heading size="md" mt={2}>
           Telegram Notifications
         </Heading>
 
-        <FormControl id="telegram-api-key">
+        <FormControl id="telegramApiKey">
           <FormLabel>Telegram Bot API Key</FormLabel>
           <Input
             value={telegramApiKey}
@@ -234,7 +224,7 @@ const ApiConfigForm: React.FC<{
           />
         </FormControl>
 
-        <FormControl id="telegram-chat-id">
+        <FormControl id="telegramChatId">
           <FormLabel>Telegram Chat ID</FormLabel>
           <Input
             value={telegramChatId}
@@ -250,10 +240,9 @@ const ApiConfigForm: React.FC<{
           isDisabled={!telegramApiKey || !telegramChatId}
         >Test Telegram</Button>
 
-        {/* Models section */}
         <Box mt={4}>
-          <Flex justifyContent="space-between" alignItems="center" mb={2}>
-            <Heading as="h3" size="md">
+          <Flex justify="space-between" align="center" mb={2}>
+            <Heading size="sm">
               Available Models
             </Heading>
             <Button
@@ -272,15 +261,15 @@ const ApiConfigForm: React.FC<{
           {models.length > 0 ? (
             <List spacing={1}>
               {models.map((model, index) => (
-                <ListItem key={index} p={2} borderWidth="1px" borderRadius="md">
+                <ListItem key={index}>
                   {model.name || model.id}
                 </ListItem>
               ))}
             </List>
           ) : (
-            <Text color="gray.600">
+            <Text fontSize="sm" color="gray.600">
               {refreshingModels ? (
-                <Flex alignItems="center">
+                <Flex align="center">
                   <Spinner size="sm" mr={2} />
                   Loading models...
                 </Flex>
@@ -291,9 +280,9 @@ const ApiConfigForm: React.FC<{
           )}
         </Box>
 
-        <Flex justify="flex-end" mt={6}>
+        <Flex justify="flex-end" mt={4}>
           <Button mr={3} onClick={onCancel}>
-            Cancel
+            Cancel          
           </Button>
           <Button
             colorScheme="blue"

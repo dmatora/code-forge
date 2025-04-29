@@ -8,7 +8,7 @@ import ScopeService from './app/services/scope.service';
 import ProjectService from './app/services/project.service';
 import FileService from './app/services/file.service';
 import ApiService from './app/services/api.service';
-import PreferencesService from './app/services/preferences.service';
+import SettingsService from './app/services/settings.service';
 
 export default class Main {
   static initialize() {
@@ -31,16 +31,20 @@ export default class Main {
     const projectsPath = join(userData, 'projects.json');
     const scopesPath   = join(userData, 'scopes.json');
 
-    // create shared ScopeService first
+    // Create SettingsService first
+    const settingsService = new SettingsService();
+
+    // create shared ScopeService
     const scopeService = new ScopeService(scopesPath);
 
     // pass the singleton into ProjectService
     new ProjectService(projectsPath, scopeService);
 
-    // other services (stateless)
+    // other services
     new FileService();
-    new ApiService();
-    new PreferencesService();
+
+    // Pass settingsService to ApiService
+    new ApiService(settingsService);
   }
 }
 

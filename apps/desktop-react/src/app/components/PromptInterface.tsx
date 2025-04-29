@@ -46,7 +46,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const [models, setModels] = useState<Model[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
-  const [useTwoStep, setUseTwoStep] = useState(true); // Default to two-step process
+  const [useTwoStep, setUseTwoStep] = useState(true);
   const [initialPreferenceLoaded, setInitialPreferenceLoaded] = useState(false);
   const toast = useToast();
 
@@ -54,69 +54,56 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const responseBg = useColorModeValue('blue.50', 'blue.900');
 
   useEffect(() => {
-    // Load API configuration and models
     const loadInitialData = async () => {
       try {
-        // Get API config
-        const config = await window.electron.getApiConfig();
-        setApiInfo(config);
+        const settings = await window.electron.getSettings();
+        if (settings && settings.apiUrl) {
+          setApiInfo({ url: settings.apiUrl, model: settings.reasoningModel || '' });
+        }
 
-        // Only fetch models if API URL is configured
-        if (config && config.url) {
-          // Get available models
+        if (settings && settings.apiUrl) {
           const modelsList = await window.electron.getModels();
-          setModels(modelsList);
+          setModels(modelsList as Model[]);
 
-          // Get saved preferences
-          const preferences = await window.electron.getPreferences();
-
-          // Set model values based on preferences, falling back to config defaults
-          if (preferences.reasoningModel && modelsList.some((m: {id: string}) => m.id === preferences.reasoningModel)) {
-            setReasoningModel(preferences.reasoningModel);
-          } else if (config?.model && modelsList.some((m: {id: string}) => m.id === config.model)) {
-            setReasoningModel(config.model);
+          if (settings.reasoningModel && modelsList.some((m: Model) => m.id === settings.reasoningModel)) {
+            setReasoningModel(settings.reasoningModel);
           } else if (modelsList.length > 0) {
             setReasoningModel(modelsList[0].id);
           }
 
-          if (preferences.regularModel && modelsList.some((m: {id: string}) => m.id === preferences.regularModel)) {
-            setRegularModel(preferences.regularModel);
-          } else if (config?.model && modelsList.some((m: {id: string}) => m.id === config.model)) {
-            setRegularModel(config.model);
+          if (settings.regularModel && modelsList.some((m: Model) => m.id === settings.regularModel)) {
+            setRegularModel(settings.regularModel);
           } else if (modelsList.length > 0) {
             setRegularModel(modelsList[0].id);
           }
 
-          // Mark that we've loaded the initial preferences
           setInitialPreferenceLoaded(true);
         }
       } catch (error) {
         console.error("Failed to load initial data:", error);
+        toast({
+          title: "Error loading configuration",
+          description: "Failed to load API configuration. Please check settings.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
       }
     };
 
     loadInitialData();
   }, []);
 
-  // Save preferences when models change, but only after initial load and when actually changed
   useEffect(() => {
-    // Skip if this is the initial load of preferences
     if (!initialPreferenceLoaded) return;
 
     const savePreferences = async () => {
       if (reasoningModel && regularModel) {
         try {
-          // Get current preferences first
-          const currentPreferences = await window.electron.getPreferences();
-
-          // Only save if something changed
-          if (currentPreferences.reasoningModel !== reasoningModel ||
-              currentPreferences.regularModel !== regularModel) {
-            await window.electron.saveModelPreferences({
-              reasoningModel,
-              regularModel
-            });
-          }
+          await window.electron.updateSettings({
+            reasoningModel,
+            regularModel
+          });
         } catch (error) {
           console.error("Failed to save model preferences:", error);
         }
@@ -235,10 +222,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           onClick={onBack}
           mr={2}
         />
-        <Box>
-          <Heading size="md">Project: {project.name}</Heading>
-          <Text>/ Scope: {scope.name}</Text>
-        </Box>
+        <Heading size="md">
+          Project: {project.name}
+          / Scope: {scope.name}
+        </Heading>
       </Flex>
 
       {!apiInfo?.url && (
@@ -247,7 +234,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button colorScheme="blue" ml={4} onClick={onOpenApiConfig}>Configure API</Button>
+              <Button ml={2} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
             )}
           </AlertDescription>
         </Alert>
@@ -267,8 +254,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         </FormControl>
 
         {/* Add the checkbox for two-step process toggle */}
-        <FormControl display="flex" alignItems="center">
-          <FormLabel htmlFor="two-step-process" mb="0">
+        <Flex align="center" mb={2}>
+          <FormLabel htmlFor="two-step-process" mb={0}>
             Use two-step patching process
           </FormLabel>
           <Switch
@@ -277,15 +264,15 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             onChange={(e) => setUseTwoStep(e.target.checked)}
             mr={2}
           />
-          <Tooltip label="Two-step process generates a detailed solution first, then creates the update script. One-step process creates the update script directly (faster but may be less accurate for complex tasks).">
-            <InfoIcon color="gray.500" />
+          <Tooltip label="When enabled, uses two AI calls: first to analyze your request, then to generate the shell script. This produces better explanations but takes longer.">
+            <InfoIcon color="blue.500" />
           </Tooltip>
-        </FormControl>
+        </Flex>
 
         {/* Only show model selection when API URL is configured */}
         {apiInfo?.url && models.length > 0 && (
-          <HStack spacing={4} wrap="wrap">
-            <FormControl flex="1" minW="250px">
+          <HStack spacing={4}>
+            <FormControl>
               <FormLabel>
                 {useTwoStep ? "Reasoning Model (First Prompt)" : "Model"}
               </FormLabel>
@@ -302,7 +289,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             </FormControl>
 
             {useTwoStep && (
-              <FormControl flex="1" minW="250px">
+              <FormControl>
                 <FormLabel>Regular Model (Update Script)</FormLabel>
                 <Select
                   value={regularModel}
@@ -342,7 +329,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         </Flex>
       </VStack>
 
-      <Box mt={6}>
+      <Box mt={8}>
         <Flex justify="space-between" align="center" mb={2}>
           <Heading size="sm">
             Context
@@ -359,24 +346,24 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           </Button>
         </Flex>
         {contextLoading ? (
-          <Text py={4}>
+          <Text>
             Loading context...
           </Text>
         ) : (
-          <Box
+          <Text
             bg={bgColor}
             p={3}
             borderRadius="md"
             fontSize="sm"
           >
             {context.length} characters total
-          </Box>
+          </Text>
         )}
       </Box>
 
       {response && (
-        <Box mt={6}>
-          <Heading size="sm" mb={2}>
+        <VStack align="stretch" mt={8} spacing={2}>
+          <Heading size="sm">
             Response
           </Heading>
           <Box
@@ -387,7 +374,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           >
             {response}
           </Box>
-        </Box>
+        </VStack>
       )}
     </Box>
   );
