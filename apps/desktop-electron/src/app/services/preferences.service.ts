@@ -24,26 +24,63 @@ export class PreferencesService {
   }
 
   private loadPreferences() {
+    console.log(`Attempting to load preferences from: ${this.preferencesFilePath}`);
     try {
       if (fs.existsSync(this.preferencesFilePath)) {
+        console.log(`Preferences file exists at: ${this.preferencesFilePath}`);
         const data = fs.readFileSync(this.preferencesFilePath, 'utf8');
         this.preferences = JSON.parse(data);
         console.log('Loaded preferences:', this.preferences);
       } else {
+        console.log(`Preferences file does not exist at: ${this.preferencesFilePath}, creating empty preferences`);
         this.preferences = {};
         this.savePreferences();
       }
     } catch (error) {
       console.error('Failed to load preferences:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        path: this.preferencesFilePath
+      });
       this.preferences = {};
     }
   }
 
   private savePreferences() {
     try {
+      console.log(`Attempting to save preferences to: ${this.preferencesFilePath}`);
+      console.log(`Preferences content: ${JSON.stringify(this.preferences, null, 2)}`);
+
+      // Check if directory exists, create it if needed
+      const dirPath = path.dirname(this.preferencesFilePath);
+      if (!fs.existsSync(dirPath)) {
+        console.log(`Creating directory: ${dirPath}`);
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+
+      // Try to save the file
       fs.writeFileSync(this.preferencesFilePath, JSON.stringify(this.preferences, null, 2));
+      console.log(`Successfully saved preferences to: ${this.preferencesFilePath}`);
     } catch (error) {
       console.error('Failed to save preferences:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        path: this.preferencesFilePath
+      });
+
+      // Try alternative location if writing fails
+      try {
+        const altPath = path.join(process.cwd(), 'preferences.json');
+        console.log(`Attempting to save to alternate location: ${altPath}`);
+        fs.writeFileSync(altPath, JSON.stringify(this.preferences, null, 2));
+        console.log(`Successfully saved preferences to alternate location: ${altPath}`);
+      } catch (altError) {
+        console.error('Failed to save preferences in alternate location:', altError);
+      }
     }
   }
 
@@ -73,10 +110,18 @@ export class PreferencesService {
 
     // Save Telegram config
     ipcMain.handle('save-telegram-config', (_, config: { telegramApiKey: string; telegramChatId: string }) => {
-      this.preferences.telegramApiKey = config.telegramApiKey;
-      this.preferences.telegramChatId = config.telegramChatId;
-      this.savePreferences();
-      return { success: true };
+      console.log('Received request to save Telegram config');
+      console.log(`API Key length: ${config.telegramApiKey?.length || 0}, Chat ID: ${config.telegramChatId}`);
+
+      try {
+        this.preferences.telegramApiKey = config.telegramApiKey;
+        this.preferences.telegramChatId = config.telegramChatId;
+        this.savePreferences();
+        return { success: true };
+      } catch (error) {
+        console.error('Error in save-telegram-config handler:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     // Test Telegram config
