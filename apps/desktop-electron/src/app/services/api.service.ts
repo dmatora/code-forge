@@ -99,7 +99,13 @@ export class ApiService {
 
   private async initializeModels() {
     try {
+      // Ensure modelsFilePath is properly set
+      if (!this.modelsFilePath) {
+        this.modelsFilePath = path.join(app.getPath('userData'), 'models.json');
+      }
+
       // Check if models.json exists
+      console.log(`Checking for models.json at path: ${this.modelsFilePath}`);
       if (!fs.existsSync(this.modelsFilePath)) {
         console.log('models.json not found, fetching available models...');
         await this.fetchAndSaveModels();
