@@ -22,7 +22,7 @@ export class FileService {
   ];
 
   private excludeExtensions = [
-    '.jpg', '.jpeg', '.png', '.ico', '.svg', '.woff2', '.zip'
+    '.jpg', '.jpeg', '.png', '.ico', '.svg', '.woff2', '.zip', '.db'
   ];
 
   constructor() {
