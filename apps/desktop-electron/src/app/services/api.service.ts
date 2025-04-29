@@ -323,6 +323,7 @@ export class ApiService {
           if (useTwoStep) {
             // First request with reasoning model
             const firstResult = await generateText({
+              maxRetries: 0,
               model: this.openaiClient(firstModel),
               messages: [{ role: 'user', content: `${prompt}\n\n${context}` }],
             });
@@ -337,6 +338,7 @@ export class ApiService {
 
             const secondStartTime = performance.now();
             const secondResult = await generateText({
+              maxRetries: 0,
               model: this.openaiClient(secondModel),
               messages: [{ role: 'user', content: secondPrompt }],
             });
@@ -364,6 +366,7 @@ export class ApiService {
             const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
 
             const oneStepResult = await generateText({
+              maxRetries: 0,
               model: this.openaiClient(firstModel),
               messages: [{ role: 'user', content: oneStepPrompt }],
             });
