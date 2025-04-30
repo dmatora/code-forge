@@ -39,7 +39,7 @@ interface ElectronAPI {
     projectId?: string;
     scopeId?: string;
     model?: string;
-  }) => Promise<{ response: string; script: string; processingTime: string }>;
+  }) => Promise<{ script: string; processingTime: string }>;
 
   generateUpdateScriptDirectly: (data: {
     prompt: string;

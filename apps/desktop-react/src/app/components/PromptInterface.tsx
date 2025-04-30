@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -18,9 +18,11 @@ import {
   Flex,
   IconButton,
   Switch,
-  Tooltip
+  Tooltip,
+  Checkbox,
+  useClipboard
 } from '@chakra-ui/react';
-import { RepeatIcon, ChevronLeftIcon, InfoIcon } from '@chakra-ui/icons';
+import { RepeatIcon, ChevronLeftIcon, InfoIcon, CopyIcon } from '@chakra-ui/icons';
 import { Project, Scope } from '../types';
 import { Model } from '../types/model';
 
@@ -39,16 +41,23 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
-  const [response, setResponse] = useState('');
+  const [solution, setSolution] = useState('');
+  const [scriptResponse, setScriptResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  const [step2Loading, setStep2Loading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
   const [useTwoStep, setUseTwoStep] = useState(true);
+  const [reviewBeforePatch, setReviewBeforePatch] = useState(true);
   const [initialPreferenceLoaded, setInitialPreferenceLoaded] = useState(false);
   const toast = useToast();
+
+  const solutionRef = useRef<HTMLTextAreaElement>(null);
+  const fullPromptValue = `${prompt}\n\nContext:\n${context}`;
+  const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } = useClipboard(fullPromptValue);
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const responseBg = useColorModeValue('blue.50', 'blue.900');
@@ -149,81 +158,131 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     regenerateContext();
   }, [scope]);
 
-  const handleSubmit = async () => {
+  const handleGenerateSolution = async () => {
     if (!prompt.trim()) return;
 
     setLoading(true);
     try {
-      if (useTwoStep) {
-        // Step 1: Generate solution
-        const solutionResult = await window.electron.generateSolution({
-          prompt,
-          context,
-          model: reasoningModel
-        });
+      // Step 1: Generate solution
+      const solutionResult = await window.electron.generateSolution({
+        prompt,
+        context,
+        model: reasoningModel
+      });
 
-        setResponse(solutionResult.solution);
+      setSolution(solutionResult.solution);
 
-        // Step 2: Generate update script
-        await window.electron.generateUpdateScript({
-          solution: solutionResult.solution,
-          context,
-          projectId: project.id,
-          scopeId: scope.id,
-          model: regularModel
-        });
+      toast({
+        title: "Solution generated",
+        description: `Solution generated in ${solutionResult.processingTime}. ${reviewBeforePatch ? 'Review and generate patch.' : ''}`,
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
 
-        toast({
-          title: "Process completed",
-          description: `Solution displayed. Update script saved as update.sh in project root folder.`,
-          status: "success",
-          duration: 5000,
-          isClosable: true,
-        });
-      } else {
-        // One-step process
-        const result = await window.electron.generateUpdateScriptDirectly({
-          prompt,
-          context,
-          projectId: project.id,
-          scopeId: scope.id,
-          model: reasoningModel
-        });
-
-        setResponse(result.response);
-
-        toast({
-          title: "Process completed",
-          description: "Response displayed and saved as update.sh in project root folder.",
-          status: "success",
-          duration: 5000,
-          isClosable: true,
-        });
+      // If auto-proceed is enabled, generate patch immediately
+      if (!reviewBeforePatch && useTwoStep) {
+        await handleGeneratePatch();
       }
     } catch (error) {
       console.error('API request failed:', error);
-      setResponse(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      setSolution(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopyPrompt = () => {
-    let fullPrompt: string;
-
-    if (useTwoStep) {
-      // Two-step process: Copy prompt + context as is
-      fullPrompt = `${prompt}\n\nContext:\n${context}`;
-    } else {
-      // One-step process: Use the same instruction as in api.service.ts
-      const oneStepInstruction = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.`;
-      fullPrompt = `${oneStepInstruction}\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
+  const handleGeneratePatch = async () => {
+    if (!solution.trim()) {
+      toast({
+        title: "Solution required",
+        description: "You need a solution to generate a patch",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
     }
 
-    navigator.clipboard.writeText(fullPrompt).then(() => {
+    setStep2Loading(true);
+    try {
+      // Step 2: Generate update script
+      const scriptResult = await window.electron.generateUpdateScript({
+        solution,
+        context,
+        projectId: project.id,
+        scopeId: scope.id,
+        model: regularModel
+      });
+
+      setScriptResponse(scriptResult.script);
+
       toast({
-        title: "Prompt copied",
-        description: `Copied to clipboard (${fullPrompt.length} characters)`,
+        title: "Patch generated",
+        description: `Update script saved as update.sh in project root folder. Generated in ${scriptResult.processingTime}.`,
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Patch generation failed:', error);
+      setScriptResponse(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setStep2Loading(false);
+    }
+  };
+
+  const handleDirectGeneration = async () => {
+    if (!prompt.trim()) return;
+
+    setLoading(true);
+    try {
+      // One-step process
+      const result = await window.electron.generateUpdateScriptDirectly({
+        prompt,
+        context,
+        projectId: project.id,
+        scopeId: scope.id,
+        model: reasoningModel
+      });
+
+      setSolution(result.response);
+      setScriptResponse(result.script);
+
+      toast({
+        title: "Process completed",
+        description: "Response displayed and saved as update.sh in project root folder.",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('API request failed:', error);
+      setSolution(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyPatchPrompt = () => {
+    if (!solution.trim()) {
+      toast({
+        title: "No solution",
+        description: "Generate a solution first or enter one manually",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
+    const promptContent = `${buildUpdatePrompt}\n\n${solution}\n\n${context}`;
+
+    navigator.clipboard.writeText(promptContent).then(() => {
+      toast({
+        title: "Patch prompt copied",
+        description: `Copied to clipboard (${promptContent.length} characters)`,
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -241,8 +300,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   };
 
   return (
-    <Box>
-      <Flex align="center" mb={4}>
+    <Box p={4}>
+      <Flex alignItems="center" mb={4}>
         <IconButton
           aria-label="Back"
           icon={<ChevronLeftIcon />}
@@ -261,7 +320,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button ml={2} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
+              <Button ml={4} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
             )}
           </AlertDescription>
         </Alert>
@@ -280,8 +339,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           />
         </FormControl>
 
-        {/* Add the checkbox for two-step process toggle */}
-        <Flex align="center" mb={2}>
+        {/* Two-step process toggle */}
+        <Flex alignItems="center" mb={2}>
           <FormLabel htmlFor="two-step-process" mb={0}>
             Use two-step patching process
           </FormLabel>
@@ -291,15 +350,30 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             onChange={(e) => setUseTwoStep(e.target.checked)}
             mr={2}
           />
-          <Tooltip label="When enabled, uses two AI calls: first to analyze your request, then to generate the shell script. This produces better explanations but takes longer.">
-            <InfoIcon color="blue.500" />
+          <Tooltip label="When enabled, generates a solution first, then a patch. When disabled, generates a patch directly.">
+            <InfoIcon />
           </Tooltip>
         </Flex>
 
-        {/* Only show model selection when API URL is configured */}
+        {/* Review before patch generation toggle */}
+        {useTwoStep && (
+          <Flex alignItems="center" mb={2}>
+            <FormLabel htmlFor="review-before-patch" mb={0}>
+              Review solution before generating patch
+            </FormLabel>
+            <Switch
+              id="review-before-patch"
+              isChecked={reviewBeforePatch}
+              onChange={(e) => setReviewBeforePatch(e.target.checked)}
+              mr={2}
+            />
+          </Flex>
+        )}
+
+        {/* Model selection */}
         {apiInfo?.url && models.length > 0 && (
           <HStack spacing={4}>
-            <FormControl>
+            <FormControl flex="1">
               <FormLabel>
                 {useTwoStep ? "Reasoning Model (First Prompt)" : "Model"}
               </FormLabel>
@@ -316,7 +390,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             </FormControl>
 
             {useTwoStep && (
-              <FormControl>
+              <FormControl flex="1">
                 <FormLabel>Regular Model (Update Script)</FormLabel>
                 <Select
                   value={regularModel}
@@ -333,76 +407,135 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           </HStack>
         )}
 
-        <Flex>
+        <HStack spacing={2}>
           <Button
-            mr={2}
-            onClick={handleCopyPrompt}
+            leftIcon={<CopyIcon />}
+            onClick={onCopyPrompt}
             isDisabled={!prompt.trim() || contextLoading || !context.trim()}
           >
-            Copy Full Prompt ({prompt.length + context.length} characters)
+            Copy Full Prompt
           </Button>
 
           {apiInfo?.url && (
-            <Button
-              colorScheme="blue"
-              onClick={handleSubmit}
-              isLoading={loading}
-              loadingText="Sending..."
-              isDisabled={!prompt.trim() || contextLoading || !context.trim()}
-            >
-              Send
-            </Button>
+            <>
+              {useTwoStep ? (
+                <Button
+                  colorScheme="blue"
+                  onClick={handleGenerateSolution}
+                  isLoading={loading}
+                  loadingText="Generating..."
+                  isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+                >
+                  Generate Solution
+                </Button>
+              ) : (
+                <Button
+                  colorScheme="blue"
+                  onClick={handleDirectGeneration}
+                  isLoading={loading}
+                  loadingText="Generating..."
+                  isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+                >
+                  Generate Patch Directly
+                </Button>
+              )}
+            </>
           )}
-        </Flex>
-      </VStack>
+        </HStack>
 
-      <Box mt={8}>
-        <Flex justify="space-between" align="center" mb={2}>
-          <Heading size="sm">
-            Context
-          </Heading>
-          <Button
-            leftIcon={<RepeatIcon />}
-            onClick={regenerateContext}
-            isLoading={contextLoading}
-            loadingText="Refreshing..."
-            colorScheme="teal"
-            size="sm"
-          >
-            Refresh Context
-          </Button>
-        </Flex>
-        {contextLoading ? (
-          <Text>
-            Loading context...
-          </Text>
-        ) : (
-          <Text
-            bg={bgColor}
-            p={3}
-            borderRadius="md"
-            fontSize="sm"
-          >
-            {context.length} characters total
-          </Text>
-        )}
-      </Box>
+        <Box mt={4}>
+          <Flex justify="space-between" align="center" mb={2}>
+            <Heading size="sm">
+              Context
+            </Heading>
+            <Button
+              leftIcon={<RepeatIcon />}
+              onClick={regenerateContext}
+              isLoading={contextLoading}
+              loadingText="Refreshing..."
+              colorScheme="teal"
+              size="sm"
+            >
+              Refresh Context
+            </Button>
+          </Flex>
+          {contextLoading ? (
+            <Text>
+              Loading context...
+            </Text>
+          ) : (
+            <Box
+              bg={bgColor}
+              p={3}
+              borderRadius="md"
+              fontSize="sm"
+            >
+              {context.length} characters total
+            </Box>
+          )}
+        </Box>
 
-      {response && (
-        <VStack align="stretch" mt={8} spacing={2}>
-          <Heading size="sm">
-            Response
-          </Heading>
-          <Box
-            bg={responseBg}
-            p={4}
-            borderRadius="md"
-            whiteSpace="pre-wrap"
-          >
-            {response}
+        {/* Solution textarea (editable) */}
+        {(useTwoStep || solution) && (
+          <Box mt={4}>
+            <Flex justify="space-between" align="center" mb={2}>
+              <Heading size="sm">
+                Solution{useTwoStep ? " (Step 1)" : ""}
+              </Heading>
+              {useTwoStep && (
+                <Button
+                  onClick={copyPatchPrompt}
+                  size="sm"
+                  leftIcon={<CopyIcon />}
+                  isDisabled={!solution.trim()}
+                >
+                  Copy Patch Prompt
+                </Button>
+              )}
+            </Flex>
+            <Textarea
+              ref={solutionRef}
+              value={solution}
+              onChange={(e) => setSolution(e.target.value)}
+              placeholder="Solution will appear here or you can manually enter one..."
+              size="md"
+              rows={10}
+              bg={responseBg}
+              mb={2}
+            />
+            {useTwoStep && (
+              <Button
+                colorScheme="green"
+                onClick={handleGeneratePatch}
+                isLoading={step2Loading}
+                loadingText="Generating Patch..."
+                isDisabled={!solution.trim()}
+                mt={2}
+              >
+                Generate Patch (Step 2)
+              </Button>
+            )}
           </Box>
-        </VStack>
-      )}
+        )}
+
+        {/* Script response */}
+        {scriptResponse && (
+          <Box mt={4}>
+            <Heading size="sm" mb={2}>
+              Update Script{useTwoStep ? " (Step 2)" : ""}
+            </Heading>
+            <Box
+              p={4}
+              borderRadius="md"
+              bg={responseBg}
+              whiteSpace="pre-wrap"
+              fontFamily="monospace"
+            >
+              {scriptResponse}
+            </Box>
+          </Box>
+        )}
+      </VStack>
     </Box>
   );
 };
