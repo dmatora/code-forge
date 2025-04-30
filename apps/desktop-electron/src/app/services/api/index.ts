@@ -39,8 +39,16 @@ export class ApiService {
       }
     });
 
-    ipcMain.handle('send-prompt', async (_, data) => {
-      return this.promptService.sendPrompt(data);
+    ipcMain.handle('generate-solution', async (_, data) => {
+      return this.promptService.generateSolution(data);
+    });
+
+    ipcMain.handle('generate-update-script', async (_, data) => {
+      return this.promptService.generateUpdateScript(data);
+    });
+
+    ipcMain.handle('generate-update-script-directly', async (_, data) => {
+      return this.promptService.generateUpdateScriptDirectly(data);
     });
   }
 }

@@ -22,7 +22,10 @@ contextBridge.exposeInMainWorld('electron', {
   selectFolders: () => ipcRenderer.invoke('select-folders'),
   generateContext: (folders) => ipcRenderer.invoke('generate-context', folders),
 
-  sendPrompt: (data) => ipcRenderer.invoke('send-prompt', data),
+  generateSolution: (data) => ipcRenderer.invoke('generate-solution', data),
+  generateUpdateScript: (data) => ipcRenderer.invoke('generate-update-script', data),
+  generateUpdateScriptDirectly: (data) => ipcRenderer.invoke('generate-update-script-directly', data),
+
   getModels: () => ipcRenderer.invoke('get-models'),
   refreshModels: (config) => ipcRenderer.invoke('refresh-models', config),
 

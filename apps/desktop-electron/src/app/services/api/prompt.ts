@@ -17,39 +17,174 @@ export class PromptService {
     private notificationsService: NotificationsService
   ) {}
 
-  public async sendPrompt({
+  /**
+   * Generates a solution based on prompt and context without creating an update script
+   */
+  public async generateSolution({
+    prompt,
+    context,
+    model
+  }: {
+    prompt: string;
+    context: string;
+    model?: string;
+  }) {
+    if (!this.apiClient.getApiUrl() || !this.apiClient.getClient()) {
+      throw new Error(
+        'API not configured. Please set API URL in settings.'
+      );
+    }
+
+    const settings = this.apiClient.getSettings();
+    const selectedModel = model || settings.reasoningModel;
+
+    console.log(`Generating solution using model: ${selectedModel}`);
+
+    const startTime = performance.now();
+
+    const result = await generateText({
+      maxRetries: 0,
+      model: this.apiClient.getClient()(selectedModel),
+      messages: [{ role: 'user', content: `${prompt}\n\n${context}` }],
+    });
+
+    const processingTime = performance.now() - startTime;
+    const formattedTime = formatProcessingTime(processingTime);
+
+    console.log(`Solution generated in ${formattedTime}`);
+
+    return {
+      solution: result.text,
+      processingTime: formattedTime
+    };
+  }
+
+  /**
+   * Takes an existing solution and generates an update script
+   */
+  public async generateUpdateScript({
+    solution,
+    context,
+    projectId,
+    scopeId,
+    model
+  }: {
+    solution: string;
+    context: string;
+    projectId?: string;
+    scopeId?: string;
+    model?: string;
+  }) {
+    if (!this.apiClient.getApiUrl() || !this.apiClient.getClient()) {
+      throw new Error(
+        'API not configured. Please set API URL in settings.'
+      );
+    }
+
+    const settings = this.apiClient.getSettings();
+    const selectedModel = model || settings.regularModel || settings.reasoningModel;
+
+    console.log(`Generating update script using model: ${selectedModel}`);
+
+    // Project and scope validation
+    const { project, scope } = this.getProjectAndScope(projectId, scopeId);
+
+    const startTime = performance.now();
+
+    const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
+    const promptContent = `${buildUpdatePrompt}\n\n${solution}\n\n${context}`;
+
+    const result = await generateText({
+      maxRetries: 0,
+      model: this.apiClient.getClient()(selectedModel),
+      messages: [{ role: 'user', content: promptContent }],
+    });
+
+    const processingTime = performance.now() - startTime;
+    const formattedTime = formatProcessingTime(processingTime);
+
+    const scriptContent = extractCodeBlock(result.text);
+
+    // Save the script to the project folder
+    const outputPath = path.join(project.rootFolder, 'update.sh');
+    fs.writeFileSync(outputPath, scriptContent);
+    console.log(`Saved update script to ${outputPath}`);
+
+    // Send notification
+    const notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing time: ${formattedTime}`;
+    await this.notificationsService.sendTelegramNotification(notificationMessage);
+
+    return {
+      script: scriptContent,
+      processingTime: formattedTime
+    };
+  }
+
+  /**
+   * Generates an update script directly from the prompt and context (one-step process)
+   */
+  public async generateUpdateScriptDirectly({
     prompt,
     context,
     projectId,
     scopeId,
-    reasoningModel,
-    regularModel,
-    useTwoStep = true,
+    model
   }: {
     prompt: string;
     context: string;
     projectId?: string;
     scopeId?: string;
-    reasoningModel?: string;
-    regularModel?: string;
-    useTwoStep?: boolean;
+    model?: string;
   }) {
     if (!this.apiClient.getApiUrl() || !this.apiClient.getClient()) {
       throw new Error(
-        'API not configured. Please set OPENAI_URL environment variable.'
+        'API not configured. Please set API URL in settings.'
       );
     }
 
     const settings = this.apiClient.getSettings();
-    const firstModel = reasoningModel || settings.reasoningModel;
-    const secondModel = regularModel || settings.regularModel;
+    const selectedModel = model || settings.reasoningModel;
 
-    console.log(`Using ${useTwoStep ? 'two-step' : 'one-step'} process`);
-    console.log(`Using reasoning model: ${firstModel}`);
-    if (useTwoStep) {
-      console.log(`Using regular model: ${secondModel}`);
-    }
+    console.log(`Generating update script directly using model: ${selectedModel}`);
 
+    // Project and scope validation
+    const { project, scope } = this.getProjectAndScope(projectId, scopeId);
+
+    const startTime = performance.now();
+
+    const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
+
+    const result = await generateText({
+      maxRetries: 0,
+      model: this.apiClient.getClient()(selectedModel),
+      messages: [{ role: 'user', content: oneStepPrompt }],
+    });
+
+    const processingTime = performance.now() - startTime;
+    const formattedTime = formatProcessingTime(processingTime);
+
+    const scriptContent = extractCodeBlock(result.text);
+
+    // Save the script to the project folder
+    const outputPath = path.join(project.rootFolder, 'update.sh');
+    fs.writeFileSync(outputPath, scriptContent);
+    console.log(`Saved update script to ${outputPath}`);
+
+    // Send notification
+    const notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing time: ${formattedTime}`;
+    await this.notificationsService.sendTelegramNotification(notificationMessage);
+
+    return {
+      response: result.text,
+      script: scriptContent,
+      processingTime: formattedTime
+    };
+  }
+
+  /**
+   * Helper method to get project and scope from IDs
+   */
+  private getProjectAndScope(projectId?: string, scopeId?: string) {
     const projectsPath = getProjectsFilePath();
     const scopesPath = getScopesFilePath();
 
@@ -74,68 +209,6 @@ export class PromptService {
       );
     }
 
-    const startTime = performance.now();
-    let responseText;
-    let processedText;
-    let notificationMessage;
-
-    if (useTwoStep) {
-      const firstResult = await generateText({
-        maxRetries: 0,
-        model: this.apiClient.getClient()(firstModel),
-        messages: [{ role: 'user', content: `${prompt}\n\n${context}` }],
-      });
-
-      const firstPromptTime = performance.now() - startTime;
-
-      console.log('Sending second request...');
-      const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
-      const secondPrompt = `${buildUpdatePrompt}\n\n${firstResult.text}\n\n${context}`;
-
-      const secondStartTime = performance.now();
-      const secondResult = await generateText({
-        maxRetries: 0,
-        model: this.apiClient.getClient()(secondModel),
-        messages: [{ role: 'user', content: secondPrompt }],
-      });
-
-      const secondPromptTime = performance.now() - secondStartTime;
-      const totalTime = performance.now() - startTime;
-
-      const firstPromptFormatted = formatProcessingTime(firstPromptTime);
-      const secondPromptFormatted = formatProcessingTime(secondPromptTime);
-      const totalFormatted = formatProcessingTime(totalTime);
-
-      responseText = firstResult.text;
-      processedText = extractCodeBlock(secondResult.text);
-
-      notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing times:\n- First prompt: ${firstPromptFormatted}\n- Second prompt: ${secondPromptFormatted}\n- Total: ${totalFormatted}`;
-    } else {
-      const oneStepPrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations.\n\nHere is my request:\n${prompt}\n\nHere is the context:\n${context}`;
-
-      const oneStepResult = await generateText({
-        maxRetries: 0,
-        model: this.apiClient.getClient()(firstModel),
-        messages: [{ role: 'user', content: oneStepPrompt }],
-      });
-
-      responseText = oneStepResult.text;
-      processedText = extractCodeBlock(oneStepResult.text);
-
-      const totalTime = performance.now() - startTime;
-      const totalFormatted = formatProcessingTime(totalTime);
-
-      notificationMessage = `✅ Script update.sh generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ One-step processing time: ${totalFormatted}`;
-    }
-
-    const outputPath = path.join(project.rootFolder, 'update.sh');
-    fs.writeFileSync(outputPath, processedText);
-    console.log(`Saved processed response to ${outputPath}`);
-
-    await this.notificationsService.sendTelegramNotification(
-      notificationMessage
-    );
-
-    return { response: responseText };
+    return { project, scope };
   }
 }

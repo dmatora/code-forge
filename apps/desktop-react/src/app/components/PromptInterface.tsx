@@ -154,25 +154,52 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
     setLoading(true);
     try {
-      const result = await window.electron.sendPrompt({
-        prompt,
-        context,
-        projectId: project.id,
-        scopeId: scope.id,
-        reasoningModel,
-        regularModel,
-        useTwoStep
-      });
-      setResponse(result.response || JSON.stringify(result));
-      toast({
-        title: "Process completed",
-        description: useTwoStep ?
-          "First response displayed. Second response saved as update.sh in project root folder." :
-          "Response saved as update.sh in project root folder.",
-        status: "success",
-        duration: 5000,
-        isClosable: true,
-      });
+      if (useTwoStep) {
+        // Step 1: Generate solution
+        const solutionResult = await window.electron.generateSolution({
+          prompt,
+          context,
+          model: reasoningModel
+        });
+
+        setResponse(solutionResult.solution);
+
+        // Step 2: Generate update script
+        await window.electron.generateUpdateScript({
+          solution: solutionResult.solution,
+          context,
+          projectId: project.id,
+          scopeId: scope.id,
+          model: regularModel
+        });
+
+        toast({
+          title: "Process completed",
+          description: `Solution displayed. Update script saved as update.sh in project root folder.`,
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+      } else {
+        // One-step process
+        const result = await window.electron.generateUpdateScriptDirectly({
+          prompt,
+          context,
+          projectId: project.id,
+          scopeId: scope.id,
+          model: reasoningModel
+        });
+
+        setResponse(result.response);
+
+        toast({
+          title: "Process completed",
+          description: "Response displayed and saved as update.sh in project root folder.",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } catch (error) {
       console.error('API request failed:', error);
       setResponse(`Error: ${error instanceof Error ? error.message : String(error)}`);

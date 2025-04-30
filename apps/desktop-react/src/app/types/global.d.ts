@@ -27,15 +27,28 @@ interface ElectronAPI {
   selectFolders: () => Promise<string[]>;
   generateContext: (folders: string[]) => Promise<string>;
 
-  sendPrompt: (data: {
+  generateSolution: (data: {
+    prompt: string;
+    context: string;
+    model?: string;
+  }) => Promise<{ solution: string; processingTime: string }>;
+
+  generateUpdateScript: (data: {
+    solution: string;
+    context: string;
+    projectId?: string;
+    scopeId?: string;
+    model?: string;
+  }) => Promise<{ response: string; script: string; processingTime: string }>;
+
+  generateUpdateScriptDirectly: (data: {
     prompt: string;
     context: string;
     projectId?: string;
     scopeId?: string;
-    reasoningModel?: string;
-    regularModel?: string;
-    useTwoStep?: boolean;
-  }) => Promise<any>;
+    model?: string;
+  }) => Promise<{ response: string; script: string; processingTime: string }>;
+
   getModels: () => Promise<any[]>;
   refreshModels: (config?: { apiUrl?: string; apiKey?: string }) => Promise<{ success: boolean, models?: any[], error?: string }>;
 
