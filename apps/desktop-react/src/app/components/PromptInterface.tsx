@@ -205,7 +205,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
       // If auto-proceed is enabled, generate patch immediately
       if (!reviewBeforePatch && useTwoStep) {
-        await handleGeneratePatch();
+        await generatePatch(solutionResult.solution);
       }
     } catch (error) {
       console.error('API request failed:', error);
@@ -217,8 +217,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     }
   };
 
-  const handleGeneratePatch = async () => {
-    if (!solution.trim()) {
+  const generatePatch = async (solutionParam?: string) => {
+    const solutionToUse = solutionParam || solution;
+
+    if (!solutionToUse.trim()) {
       toast({
         title: 'Solution required',
         description: 'You need a solution to generate a patch',
@@ -233,7 +235,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     try {
       // Step 2: Generate update script
       const scriptResult = await window.electron.generateUpdateScript({
-        solution,
+        solution: solutionToUse,
         context,
         projectId: project.id,
         scopeId: scope.id,
@@ -257,6 +259,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     } finally {
       setStep2Loading(false);
     }
+  };
+
+  const handleGeneratePatch: React.MouseEventHandler = () => {
+    generatePatch();
   };
 
   const handleDirectGeneration = async () => {
