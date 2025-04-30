@@ -3,6 +3,7 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { Project } from './types';
 import ScopeService from './scope.service';
+import { OpenDialogOptions } from 'electron';
 
 class ProjectService {
   private storagePath: string;
@@ -84,10 +85,10 @@ class ProjectService {
     });
 
     ipcMain.handle('select-root-folder', async () => {
-      const { canceled, filePaths } = await dialog.showOpenDialog({
-        properties: ['openDirectory'],
-        multiSelections: false,
-      });
+      const options: OpenDialogOptions = {
+        properties: ['openDirectory']
+      };
+      const { canceled, filePaths } = await dialog.showOpenDialog(options);
       return canceled || !filePaths.length ? null : filePaths[0];
     });
   }
