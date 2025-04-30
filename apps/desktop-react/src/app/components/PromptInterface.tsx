@@ -20,9 +20,14 @@ import {
   Switch,
   Tooltip,
   Checkbox,
-  useClipboard
+  useClipboard,
 } from '@chakra-ui/react';
-import { RepeatIcon, ChevronLeftIcon, InfoIcon, CopyIcon } from '@chakra-ui/icons';
+import {
+  RepeatIcon,
+  ChevronLeftIcon,
+  InfoIcon,
+  CopyIcon,
+} from '@chakra-ui/icons';
 import { Project, Scope } from '../types';
 import { Model } from '../types/model';
 
@@ -37,7 +42,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   project,
   scope,
   onBack,
-  onOpenApiConfig
+  onOpenApiConfig,
 }) => {
   const [prompt, setPrompt] = useState('');
   const [context, setContext] = useState('');
@@ -46,7 +51,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const [loading, setLoading] = useState(false);
   const [step2Loading, setStep2Loading] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
-  const [apiInfo, setApiInfo] = useState<{url: string, model: string} | null>(null);
+  const [apiInfo, setApiInfo] = useState<{ url: string; model: string } | null>(
+    null
+  );
   const [models, setModels] = useState<Model[]>([]);
   const [reasoningModel, setReasoningModel] = useState('');
   const [regularModel, setRegularModel] = useState('');
@@ -57,7 +64,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
   const solutionRef = useRef<HTMLTextAreaElement>(null);
   const fullPromptValue = `${prompt}\n\nContext:\n${context}`;
-  const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } = useClipboard(fullPromptValue);
+  const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } =
+    useClipboard(fullPromptValue);
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const responseBg = useColorModeValue('blue.50', 'blue.900');
@@ -67,20 +75,29 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
       try {
         const settings = await window.electron.getSettings();
         if (settings && settings.apiUrl) {
-          setApiInfo({ url: settings.apiUrl, model: settings.reasoningModel || '' });
+          setApiInfo({
+            url: settings.apiUrl,
+            model: settings.reasoningModel || '',
+          });
         }
 
         if (settings && settings.apiUrl) {
           const modelsList = await window.electron.getModels();
           setModels(modelsList as Model[]);
 
-          if (settings.reasoningModel && modelsList.some((m: Model) => m.id === settings.reasoningModel)) {
+          if (
+            settings.reasoningModel &&
+            modelsList.some((m: Model) => m.id === settings.reasoningModel)
+          ) {
             setReasoningModel(settings.reasoningModel);
           } else if (modelsList.length > 0) {
             setReasoningModel(modelsList[0].id);
           }
 
-          if (settings.regularModel && modelsList.some((m: Model) => m.id === settings.regularModel)) {
+          if (
+            settings.regularModel &&
+            modelsList.some((m: Model) => m.id === settings.regularModel)
+          ) {
             setRegularModel(settings.regularModel);
           } else if (modelsList.length > 0) {
             setRegularModel(modelsList[0].id);
@@ -89,11 +106,12 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           setInitialPreferenceLoaded(true);
         }
       } catch (error) {
-        console.error("Failed to load initial data:", error);
+        console.error('Failed to load initial data:', error);
         toast({
-          title: "Error loading configuration",
-          description: "Failed to load API configuration. Please check settings.",
-          status: "error",
+          title: 'Error loading configuration',
+          description:
+            'Failed to load API configuration. Please check settings.',
+          status: 'error',
           duration: 5000,
           isClosable: true,
         });
@@ -111,10 +129,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         try {
           await window.electron.updateSettings({
             reasoningModel,
-            regularModel
+            regularModel,
           });
         } catch (error) {
-          console.error("Failed to save model preferences:", error);
+          console.error('Failed to save model preferences:', error);
         }
       }
     };
@@ -132,18 +150,18 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         const content = await window.electron.generateContext(scope.folders);
         setContext(content);
         toast({
-          title: "Context refreshed",
-          description: "Project context has been regenerated successfully",
-          status: "success",
+          title: 'Context refreshed',
+          description: 'Project context has been regenerated successfully',
+          status: 'success',
           duration: 3000,
           isClosable: true,
         });
       } catch (error) {
         console.error('Failed to generate context:', error);
         toast({
-          title: "Refresh failed",
-          description: "Failed to regenerate context",
-          status: "error",
+          title: 'Refresh failed',
+          description: 'Failed to regenerate context',
+          status: 'error',
           duration: 3000,
           isClosable: true,
         });
@@ -170,15 +188,17 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         model: reasoningModel,
         projectId: project.id,
         scopeId: scope.id,
-        reviewBeforePatch: reviewBeforePatch
+        reviewBeforePatch: reviewBeforePatch,
       });
 
       setSolution(solutionResult.solution);
 
       toast({
-        title: "Solution generated",
-        description: `Solution generated in ${solutionResult.processingTime}. ${reviewBeforePatch ? 'Review and generate patch.' : ''}`,
-        status: "success",
+        title: 'Solution generated',
+        description: `Solution generated in ${solutionResult.processingTime}. ${
+          reviewBeforePatch ? 'Review and generate patch.' : ''
+        }`,
+        status: 'success',
         duration: 5000,
         isClosable: true,
       });
@@ -189,7 +209,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
       }
     } catch (error) {
       console.error('API request failed:', error);
-      setSolution(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      setSolution(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setLoading(false);
     }
@@ -198,9 +220,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const handleGeneratePatch = async () => {
     if (!solution.trim()) {
       toast({
-        title: "Solution required",
-        description: "You need a solution to generate a patch",
-        status: "warning",
+        title: 'Solution required',
+        description: 'You need a solution to generate a patch',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
@@ -215,21 +237,23 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         context,
         projectId: project.id,
         scopeId: scope.id,
-        model: regularModel
+        model: regularModel,
       });
 
       setScriptResponse(scriptResult.script);
 
       toast({
-        title: "Patch generated",
+        title: 'Patch generated',
         description: `Update script saved as update.sh in project root folder. Generated in ${scriptResult.processingTime}.`,
-        status: "success",
+        status: 'success',
         duration: 5000,
         isClosable: true,
       });
     } catch (error) {
       console.error('Patch generation failed:', error);
-      setScriptResponse(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      setScriptResponse(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setStep2Loading(false);
     }
@@ -246,22 +270,25 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         context,
         projectId: project.id,
         scopeId: scope.id,
-        model: reasoningModel
+        model: reasoningModel,
       });
 
       setSolution(result.response);
       setScriptResponse(result.script);
 
       toast({
-        title: "Process completed",
-        description: "Response displayed and saved as update.sh in project root folder.",
-        status: "success",
+        title: 'Process completed',
+        description:
+          'Response displayed and saved as update.sh in project root folder.',
+        status: 'success',
         duration: 5000,
         isClosable: true,
       });
     } catch (error) {
       console.error('API request failed:', error);
-      setSolution(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      setSolution(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setLoading(false);
     }
@@ -270,9 +297,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const copyPatchPrompt = () => {
     if (!solution.trim()) {
       toast({
-        title: "No solution",
-        description: "Generate a solution first or enter one manually",
-        status: "warning",
+        title: 'No solution',
+        description: 'Generate a solution first or enter one manually',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
@@ -282,24 +309,27 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     const buildUpdatePrompt = `Could you please provide step-by-step instructions with specific file changes as shell commands, but include all the changes in a single shell block that I can copy and paste into my terminal to apply them all at once? Please ensure that the changes are grouped together and can be executed in one go. Start script from cd command to ensure it runs in correct folder. Don't worry about backup I am using git. Do not use sed or patch - always use cat with EOF as most reliable way to update file. Omit explanations`;
     const promptContent = `${buildUpdatePrompt}\n\n${solution}\n\n${context}`;
 
-    navigator.clipboard.writeText(promptContent).then(() => {
-      toast({
-        title: "Patch prompt copied",
-        description: `Copied to clipboard (${promptContent.length} characters)`,
-        status: "success",
-        duration: 3000,
-        isClosable: true,
+    navigator.clipboard
+      .writeText(promptContent)
+      .then(() => {
+        toast({
+          title: 'Patch prompt copied',
+          description: `Copied to clipboard (${promptContent.length} characters)`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to copy prompt:', err);
+        toast({
+          title: 'Copy failed',
+          description: 'Failed to copy to clipboard',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
       });
-    }).catch(err => {
-      console.error('Failed to copy prompt:', err);
-      toast({
-        title: "Copy failed",
-        description: "Failed to copy to clipboard",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-    });
   };
 
   return (
@@ -312,8 +342,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           mr={2}
         />
         <Heading size="md">
-          Project: {project.name}
-          / Scope: {scope.name}
+          Project: {project.name}/ Scope: {scope.name}
         </Heading>
       </Flex>
 
@@ -323,7 +352,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button ml={4} size="sm" onClick={onOpenApiConfig}>Configure API</Button>
+              <Button ml={4} size="sm" onClick={onOpenApiConfig}>
+                Configure API
+              </Button>
             )}
           </AlertDescription>
         </Alert>
@@ -334,7 +365,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <FormLabel>Prompt</FormLabel>
           <Textarea
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={(e) => setPrompt(e.target.value)}
             placeholder="Enter your prompt here..."
             size="md"
             rows={5}
@@ -378,13 +409,13 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <HStack spacing={4}>
             <FormControl flex="1">
               <FormLabel>
-                {useTwoStep ? "Reasoning Model (First Prompt)" : "Model"}
+                {useTwoStep ? 'Reasoning Model (First Prompt)' : 'Model'}
               </FormLabel>
               <Select
                 value={reasoningModel}
                 onChange={(e) => setReasoningModel(e.target.value)}
               >
-                {models.map(model => (
+                {models.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name || model.id}
                   </option>
@@ -399,7 +430,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
                   value={regularModel}
                   onChange={(e) => setRegularModel(e.target.value)}
                 >
-                  {models.map(model => (
+                  {models.map((model) => (
                     <option key={model.id} value={model.id}>
                       {model.name || model.id}
                     </option>
@@ -427,7 +458,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
                   onClick={handleGenerateSolution}
                   isLoading={loading}
                   loadingText="Generating..."
-                  isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+                  isDisabled={
+                    !prompt.trim() || contextLoading || !context.trim()
+                  }
                 >
                   Generate Solution
                 </Button>
@@ -437,7 +470,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
                   onClick={handleDirectGeneration}
                   isLoading={loading}
                   loadingText="Generating..."
-                  isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+                  isDisabled={
+                    !prompt.trim() || contextLoading || !context.trim()
+                  }
                 >
                   Generate Patch Directly
                 </Button>
@@ -448,9 +483,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
         <Box mt={4}>
           <Flex justify="space-between" align="center" mb={2}>
-            <Heading size="sm">
-              Context
-            </Heading>
+            <Heading size="sm">Context</Heading>
             <Button
               leftIcon={<RepeatIcon />}
               onClick={regenerateContext}
@@ -463,16 +496,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             </Button>
           </Flex>
           {contextLoading ? (
-            <Text>
-              Loading context...
-            </Text>
+            <Text>Loading context...</Text>
           ) : (
-            <Box
-              bg={bgColor}
-              p={3}
-              borderRadius="md"
-              fontSize="sm"
-            >
+            <Box bg={bgColor} p={3} borderRadius="md" fontSize="sm">
               {context.length} characters total
             </Box>
           )}
@@ -483,7 +509,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           <Box mt={4}>
             <Flex justify="space-between" align="center" mb={2}>
               <Heading size="sm">
-                Solution{useTwoStep ? " (Step 1)" : ""}
+                Solution{useTwoStep ? ' (Step 1)' : ''}
               </Heading>
               {useTwoStep && (
                 <Button
@@ -525,7 +551,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         {scriptResponse && (
           <Box mt={4}>
             <Heading size="sm" mb={2}>
-              Update Script{useTwoStep ? " (Step 2)" : ""}
+              Update Script{useTwoStep ? ' (Step 2)' : ''}
             </Heading>
             <Box
               p={4}
