@@ -31,6 +31,9 @@ interface ElectronAPI {
     prompt: string;
     context: string;
     model?: string;
+    projectId?: string;
+    scopeId?: string;
+    reviewBeforePatch?: boolean;
   }) => Promise<{ solution: string; processingTime: string }>;
 
   generateUpdateScript: (data: {

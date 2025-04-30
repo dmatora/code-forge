@@ -23,11 +23,17 @@ export class PromptService {
   public async generateSolution({
     prompt,
     context,
-    model
+    model,
+    projectId,
+    scopeId,
+    reviewBeforePatch = true,
   }: {
     prompt: string;
     context: string;
     model?: string;
+    projectId?: string;
+    scopeId?: string;
+    reviewBeforePatch?: boolean;
   }) {
     if (!this.apiClient.getApiUrl() || !this.apiClient.getClient()) {
       throw new Error(
@@ -52,6 +58,19 @@ export class PromptService {
     const formattedTime = formatProcessingTime(processingTime);
 
     console.log(`Solution generated in ${formattedTime}`);
+
+    // Send notification if review before patch is enabled
+    if (reviewBeforePatch) {
+      try {
+        const { project, scope } = this.getProjectAndScope(projectId, scopeId);
+        const notificationMessage = `✅ Solution generated successfully for project "${project.name}" (Scope: ${scope.name}).\n\n⏱️ Processing time: ${formattedTime}\n\n🔍 Review solution and generate patch.`;
+        await this.notificationsService.sendTelegramNotification(
+          notificationMessage
+        );
+      } catch (error) {
+        console.error('Failed to send solution notification:', error);
+      }
+    }
 
     return {
       solution: result.text,

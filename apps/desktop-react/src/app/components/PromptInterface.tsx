@@ -167,7 +167,10 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
       const solutionResult = await window.electron.generateSolution({
         prompt,
         context,
-        model: reasoningModel
+        model: reasoningModel,
+        projectId: project.id,
+        scopeId: scope.id,
+        reviewBeforePatch: reviewBeforePatch
       });
 
       setSolution(solutionResult.solution);
