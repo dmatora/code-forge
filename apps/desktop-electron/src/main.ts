@@ -7,7 +7,7 @@ import { join } from 'path';
 import ScopeService from './app/services/scope.service';
 import ProjectService from './app/services/project.service';
 import FileService from './app/services/file.service';
-import ApiService from './app/services/api.service';
+import { ApiService } from './app/services/api';
 import SettingsService from './app/services/settings.service';
 
 export default class Main {

@@ -2,7 +2,7 @@
   "name": "code-forge",
   "productName": "Code Forge",
   "description": "AI-powered code assistant",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "license": "MIT",
   "scripts": {
     "serve": "nx serve desktop-react & nx serve desktop-electron",
