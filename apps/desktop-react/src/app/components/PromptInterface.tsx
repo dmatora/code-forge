@@ -7,6 +7,7 @@ import {
   Text,
   VStack,
   Alert,
+  AlertIcon,
   AlertTitle,
   AlertDescription,
   useColorModeValue,
@@ -66,6 +67,13 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   const fullPromptValue = `${prompt}\n\nContext:\n${context}`;
   const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } =
     useClipboard(fullPromptValue);
+
+  const planPrompt = `Lets break this into stages (separating changes between major project aspects like front and back)
+give me prompts for each stage
+each prompt should have it's own copy block
+for each prompt provide single dimension array of absolute paths to the files relevant for the task (both relevant for understanding task context and for making changes)`;
+  const planPromptValue = `${prompt}\n\n${planPrompt}\n\nContext:\n${context}`;
+  const { hasCopied: hasCopiedPlanPrompt, onCopy: onCopyPlanPrompt } = useClipboard(planPromptValue);
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const responseBg = useColorModeValue('blue.50', 'blue.900');
@@ -261,7 +269,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
     }
   };
 
-  const handleGeneratePatch: React.MouseEventHandler = () => {
+  const handleGeneratePatch: React.MouseEventHandler<HTMLButtonElement> = () => {
     generatePatch();
   };
 
@@ -339,26 +347,27 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
   };
 
   return (
-    <Box p={4}>
-      <Flex alignItems="center" mb={4}>
+    <Box p={6} maxW="1200px" mx="auto">
+      <Flex align="center" mb={6}>
         <IconButton
           aria-label="Back"
           icon={<ChevronLeftIcon />}
           onClick={onBack}
           mr={2}
         />
-        <Heading size="md">
+        <Heading size="lg">
           Project: {project.name}/ Scope: {scope.name}
         </Heading>
       </Flex>
 
       {!apiInfo?.url && (
         <Alert status="warning" mb={4}>
+          <AlertIcon />
           <AlertTitle>API Not Configured</AlertTitle>
           <AlertDescription>
             Please configure the API URL to use automatic patch generation
             {onOpenApiConfig && (
-              <Button ml={4} size="sm" onClick={onOpenApiConfig}>
+              <Button ml={2} size="sm" onClick={onOpenApiConfig}>
                 Configure API
               </Button>
             )}
@@ -366,7 +375,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         </Alert>
       )}
 
-      <VStack spacing={4} align="stretch">
+      <VStack spacing={6} align="stretch">
         <FormControl>
           <FormLabel>Prompt</FormLabel>
           <Textarea
@@ -380,8 +389,8 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
         </FormControl>
 
         {/* Two-step process toggle */}
-        <Flex alignItems="center" mb={2}>
-          <FormLabel htmlFor="two-step-process" mb={0}>
+        <FormControl display="flex" alignItems="center">
+          <FormLabel htmlFor="two-step-process" mb="0">
             Use two-step patching process
           </FormLabel>
           <Switch
@@ -390,15 +399,15 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             onChange={(e) => setUseTwoStep(e.target.checked)}
             mr={2}
           />
-          <Tooltip label="When enabled, generates a solution first, then a patch. When disabled, generates a patch directly.">
+          <Tooltip label="Two-step process allows you to review the solution before generating the patch">
             <InfoIcon />
           </Tooltip>
-        </Flex>
+        </FormControl>
 
         {/* Review before patch generation toggle */}
         {useTwoStep && (
-          <Flex alignItems="center" mb={2}>
-            <FormLabel htmlFor="review-before-patch" mb={0}>
+          <FormControl display="flex" alignItems="center">
+            <FormLabel htmlFor="review-before-patch" mb="0">
               Review solution before generating patch
             </FormLabel>
             <Switch
@@ -407,13 +416,13 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
               onChange={(e) => setReviewBeforePatch(e.target.checked)}
               mr={2}
             />
-          </Flex>
+          </FormControl>
         )}
 
         {/* Model selection */}
         {apiInfo?.url && models.length > 0 && (
           <HStack spacing={4}>
-            <FormControl flex="1">
+            <FormControl>
               <FormLabel>
                 {useTwoStep ? 'Reasoning Model (First Prompt)' : 'Model'}
               </FormLabel>
@@ -430,7 +439,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             </FormControl>
 
             {useTwoStep && (
-              <FormControl flex="1">
+              <FormControl>
                 <FormLabel>Regular Model (Update Script)</FormLabel>
                 <Select
                   value={regularModel}
@@ -447,13 +456,22 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           </HStack>
         )}
 
-        <HStack spacing={2}>
+        <HStack>
           <Button
             leftIcon={<CopyIcon />}
             onClick={onCopyPrompt}
             isDisabled={!prompt.trim() || contextLoading || !context.trim()}
           >
             Copy Full Prompt
+          </Button>
+
+          <Button
+            leftIcon={<CopyIcon />}
+            onClick={onCopyPlanPrompt}
+            isDisabled={!prompt.trim() || contextLoading || !context.trim()}
+            colorScheme="purple"
+          >
+            Copy Plan Prompt
           </Button>
 
           {apiInfo?.url && (
@@ -487,9 +505,9 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           )}
         </HStack>
 
-        <Box mt={4}>
-          <Flex justify="space-between" align="center" mb={2}>
-            <Heading size="sm">Context</Heading>
+        <FormControl>
+          <Flex justifyContent="space-between" alignItems="center">
+            <FormLabel>Context</FormLabel>
             <Button
               leftIcon={<RepeatIcon />}
               onClick={regenerateContext}
@@ -504,19 +522,19 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
           {contextLoading ? (
             <Text>Loading context...</Text>
           ) : (
-            <Box bg={bgColor} p={3} borderRadius="md" fontSize="sm">
+            <Text fontSize="sm" color="gray.600">
               {context.length} characters total
-            </Box>
+            </Text>
           )}
-        </Box>
+        </FormControl>
 
         {/* Solution textarea (editable) */}
         {(useTwoStep || solution) && (
-          <Box mt={4}>
-            <Flex justify="space-between" align="center" mb={2}>
-              <Heading size="sm">
+          <FormControl>
+            <Flex justifyContent="space-between" alignItems="center">
+              <FormLabel>
                 Solution{useTwoStep ? ' (Step 1)' : ''}
-              </Heading>
+              </FormLabel>
               {useTwoStep && (
                 <Button
                   onClick={copyPatchPrompt}
@@ -550,15 +568,15 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
                 Generate Patch (Step 2)
               </Button>
             )}
-          </Box>
+          </FormControl>
         )}
 
         {/* Script response */}
         {scriptResponse && (
-          <Box mt={4}>
-            <Heading size="sm" mb={2}>
+          <FormControl>
+            <FormLabel>
               Update Script{useTwoStep ? ' (Step 2)' : ''}
-            </Heading>
+            </FormLabel>
             <Box
               p={4}
               borderRadius="md"
@@ -568,7 +586,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
             >
               {scriptResponse}
             </Box>
-          </Box>
+          </FormControl>
         )}
       </VStack>
     </Box>
