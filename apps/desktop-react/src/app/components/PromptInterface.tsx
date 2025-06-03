@@ -65,8 +65,7 @@ const PromptInterface: React.FC<PromptInterfaceProps> = ({
 
   const solutionRef = useRef<HTMLTextAreaElement>(null);
   const fullPromptValue = `${prompt}\n\nContext:\n${context}`;
-  const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } =
-    useClipboard(fullPromptValue);
+  const { hasCopied: hasCopiedPrompt, onCopy: onCopyPrompt } = useClipboard(fullPromptValue);
 
   const planPrompt = `Lets break this into stages (separating changes between major project aspects like front and back)
 give me prompts for each stage
@@ -77,6 +76,27 @@ for each prompt provide single dimension array of absolute paths to the files re
 
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const responseBg = useColorModeValue('blue.50', 'blue.900');
+
+  // Create wrapper functions that handle the copying and show the toast
+  const handleCopyPrompt = () => {
+    onCopyPrompt();
+    toast({
+      title: 'Prompt copied to clipboard',
+      status: 'success',
+      duration: 2000,
+      isClosable: true,
+    });
+  };
+
+  const handleCopyPlanPrompt = () => {
+    onCopyPlanPrompt();
+    toast({
+      title: 'Plan prompt copied to clipboard',
+      status: 'success',
+      duration: 2000,
+      isClosable: true,
+    });
+  };
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -327,10 +347,9 @@ for each prompt provide single dimension array of absolute paths to the files re
       .writeText(promptContent)
       .then(() => {
         toast({
-          title: 'Patch prompt copied',
-          description: `Copied to clipboard (${promptContent.length} characters)`,
+          title: 'Patch prompt copied to clipboard',
           status: 'success',
-          duration: 3000,
+          duration: 2000,
           isClosable: true,
         });
       })
@@ -347,7 +366,7 @@ for each prompt provide single dimension array of absolute paths to the files re
   };
 
   return (
-    <Box p={6} maxW="1200px" mx="auto">
+    <Box p={6}>
       <Flex align="center" mb={6}>
         <IconButton
           aria-label="Back"
@@ -361,7 +380,7 @@ for each prompt provide single dimension array of absolute paths to the files re
       </Flex>
 
       {!apiInfo?.url && (
-        <Alert status="warning" mb={4}>
+        <Alert status="warning" mb={6}>
           <AlertIcon />
           <AlertTitle>API Not Configured</AlertTitle>
           <AlertDescription>
@@ -389,8 +408,8 @@ for each prompt provide single dimension array of absolute paths to the files re
         </FormControl>
 
         {/* Two-step process toggle */}
-        <FormControl display="flex" alignItems="center">
-          <FormLabel htmlFor="two-step-process" mb="0">
+        <HStack>
+          <FormLabel htmlFor="two-step-process" mb={0}>
             Use two-step patching process
           </FormLabel>
           <Switch
@@ -399,15 +418,15 @@ for each prompt provide single dimension array of absolute paths to the files re
             onChange={(e) => setUseTwoStep(e.target.checked)}
             mr={2}
           />
-          <Tooltip label="Two-step process allows you to review the solution before generating the patch">
+          <Tooltip label="Two-step process allows reviewing the solution before generating the patch">
             <InfoIcon />
           </Tooltip>
-        </FormControl>
+        </HStack>
 
         {/* Review before patch generation toggle */}
         {useTwoStep && (
-          <FormControl display="flex" alignItems="center">
-            <FormLabel htmlFor="review-before-patch" mb="0">
+          <HStack>
+            <FormLabel htmlFor="review-before-patch" mb={0}>
               Review solution before generating patch
             </FormLabel>
             <Switch
@@ -416,13 +435,13 @@ for each prompt provide single dimension array of absolute paths to the files re
               onChange={(e) => setReviewBeforePatch(e.target.checked)}
               mr={2}
             />
-          </FormControl>
+          </HStack>
         )}
 
         {/* Model selection */}
         {apiInfo?.url && models.length > 0 && (
           <HStack spacing={4}>
-            <FormControl>
+            <FormControl flex={1}>
               <FormLabel>
                 {useTwoStep ? 'Reasoning Model (First Prompt)' : 'Model'}
               </FormLabel>
@@ -439,7 +458,7 @@ for each prompt provide single dimension array of absolute paths to the files re
             </FormControl>
 
             {useTwoStep && (
-              <FormControl>
+              <FormControl flex={1}>
                 <FormLabel>Regular Model (Update Script)</FormLabel>
                 <Select
                   value={regularModel}
@@ -456,10 +475,10 @@ for each prompt provide single dimension array of absolute paths to the files re
           </HStack>
         )}
 
-        <HStack>
+        <HStack spacing={4}>
           <Button
             leftIcon={<CopyIcon />}
-            onClick={onCopyPrompt}
+            onClick={handleCopyPrompt}
             isDisabled={!prompt.trim() || contextLoading || !context.trim()}
           >
             Copy Full Prompt
@@ -467,7 +486,7 @@ for each prompt provide single dimension array of absolute paths to the files re
 
           <Button
             leftIcon={<CopyIcon />}
-            onClick={onCopyPlanPrompt}
+            onClick={handleCopyPlanPrompt}
             isDisabled={!prompt.trim() || contextLoading || !context.trim()}
             colorScheme="purple"
           >
@@ -506,8 +525,8 @@ for each prompt provide single dimension array of absolute paths to the files re
         </HStack>
 
         <FormControl>
-          <Flex justifyContent="space-between" alignItems="center">
-            <FormLabel>Context</FormLabel>
+          <Flex justify="space-between" align="center" mb={2}>
+            <FormLabel mb={0}>Context</FormLabel>
             <Button
               leftIcon={<RepeatIcon />}
               onClick={regenerateContext}
@@ -522,7 +541,7 @@ for each prompt provide single dimension array of absolute paths to the files re
           {contextLoading ? (
             <Text>Loading context...</Text>
           ) : (
-            <Text fontSize="sm" color="gray.600">
+            <Text color="gray.600" fontSize="sm" mb={2}>
               {context.length} characters total
             </Text>
           )}
@@ -531,8 +550,8 @@ for each prompt provide single dimension array of absolute paths to the files re
         {/* Solution textarea (editable) */}
         {(useTwoStep || solution) && (
           <FormControl>
-            <Flex justifyContent="space-between" alignItems="center">
-              <FormLabel>
+            <Flex justify="space-between" align="center" mb={2}>
+              <FormLabel mb={0}>
                 Solution{useTwoStep ? ' (Step 1)' : ''}
               </FormLabel>
               {useTwoStep && (
